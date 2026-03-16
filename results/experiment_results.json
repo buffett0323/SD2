@@ -26,30 +26,30 @@
     "block_length": 16,
     "summary": {
       "B1": {
-        "latency_ms_mean": 85.12057912303135,
+        "latency_ms_mean": 85.54251689929515,
         "nfe_mean": 1.0,
-        "ttft_ms_mean": 85.12057912303135,
+        "ttft_ms_mean": 85.54251689929515,
         "success_rate": 1.0,
         "n_tokens_mean": 16.0
       },
       "B2": {
-        "latency_ms_mean": 0.2986124949529767,
+        "latency_ms_mean": 0.30861239647492766,
         "nfe_mean": 1.0,
-        "ttft_ms_mean": 0.2986124949529767,
+        "ttft_ms_mean": 0.30861239647492766,
         "success_rate": 1.0,
         "n_tokens_mean": 16.0
       },
       "B3": {
-        "latency_ms_mean": 15.789716609288007,
+        "latency_ms_mean": 15.700037591159344,
         "nfe_mean": 1.0,
-        "ttft_ms_mean": 15.789716609288007,
+        "ttft_ms_mean": 15.700037591159344,
         "success_rate": 1.0,
         "n_tokens_mean": 16.0
       },
       "SDSD": {
-        "latency_ms_mean": 17.55737909115851,
+        "latency_ms_mean": 17.25120838964358,
         "nfe_mean": 1.0,
-        "ttft_ms_mean": 17.55737909115851,
+        "ttft_ms_mean": 17.25120838964358,
         "success_rate": 1.0,
         "n_tokens_mean": 16.0
       }

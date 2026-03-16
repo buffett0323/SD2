@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Sparse Deterministic Speculative Decoding"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "nvitop>=1.6.2",
+]
 
 # Install ONE of these (mutually exclusive due to transformers version):
 #   uv sync --extra dream   OR   uv pip install -r requirements-llada.txt

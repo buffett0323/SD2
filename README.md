@@ -55,6 +55,8 @@ print(result.probability)
 
 ## UV install
 ```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.11
 uv pip install -r requirements.txt 
 uv sync
 uv sync --extra dream # Dream-7B dependencies
@@ -75,7 +77,7 @@ cd src && python benchmark_b1_b2.py
 ## Run DLLM Integration Test
 
 ```bash
-cd src && python test_dllm_sdsd.py --mock          # No GPU: synthetic logits
+cd src && python test_dllm_sdsd.py --mock         # No GPU: synthetic logits
 cd src && python test_dllm_sdsd.py --model dream  # Dream-7B (needs ~20GB GPU)
 cd src && python test_dllm_sdsd.py --model llada  # LLaDA-8B-Instruct (needs ~16GB GPU)
 ```
@@ -85,7 +87,7 @@ Requires: `pip install torch transformers`. Dream needs transformers>=4.46; LLaD
 ## Run B1/B2/B3/SDSD Evaluation
 
 ```bash
-python run_experiments.py --model dream --mock          # Synthetic (no GPU)
+python run_experiments.py --model dream --mock         # Synthetic (no GPU)
 python run_experiments.py --model dream --samples 10   # Dream-7B (GPU)
 python run_experiments.py --model llada                # LLaDA-8B (GPU)
 python run_experiments.py --intent-recovery-only       # Intent recovery ablation only
