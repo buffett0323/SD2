@@ -1,0 +1,6 @@
+# LLaDA-8B-Instruct (test_dllm_sdsd.py --model llada)
+# Use with: uv pip install -r requirements-llada.txt
+# Note: transformers 4.38.2 required for LLaDA; incompatible with Dream
+
+torch
+transformers==4.38.2

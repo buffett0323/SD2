@@ -1,0 +1,15 @@
+[project]
+name = "sdsd"
+version = "0.1.0"
+description = "Sparse Deterministic Speculative Decoding"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+# Install ONE of these (mutually exclusive due to transformers version):
+#   uv sync --extra dream   OR   uv pip install -r requirements-llada.txt
+[project.optional-dependencies]
+dream = [
+    "torch>=2.5",
+    "transformers>=4.46",
+]

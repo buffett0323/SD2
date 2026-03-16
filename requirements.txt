@@ -1,0 +1,10 @@
+# SDSD: Sparse Deterministic Speculative Decoding
+# Core: Python 3.9+ (no deps for csr_dfa, sparse_dingo, baseline_dingo)
+#
+# Install via uv:
+#   uv pip install -r requirements.txt              # Dream-7B (default)
+#   uv pip install -r requirements-llada.txt        # LLaDA-8B only
+
+# Dream-7B (test_dllm_sdsd.py --model dream)
+torch>=2.5
+transformers>=4.46
