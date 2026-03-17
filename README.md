@@ -2,6 +2,12 @@
 
 SDSD combines **DINGO** (constrained decoding), **STATIC** (O(K) sparse indexing), **Herding** (intent recovery), and **Speculative Tree** (NFE reduction) for efficient grammar-constrained generation from diffusion LLMs.
 
+## TODO
+
+- [ ] Add accuracy metrics (e.g., parse rate, constraint satisfaction, pass@1)
+- [ ] Compare SDSD with LAVE (or other baselines)
+- [ ] Benchmark latency with warmup: exclude first 10 runs to avoid cold-start overhead
+
 ## Key Components
 
 | Component | Role | Effect |
@@ -108,7 +114,19 @@ cd src && python -m eval.intent_recovery
 
 Compares B2 vs Herding on recovery after perturbing a token. Herding recovers faster via momentum.
 
+
+## Cloning Baseline Repos
+```bash
+# STATIC
+git clone https://github.com/youtube/static-constraint-decoding.git
+
+# Constrained diffusion
+git clone https://github.com/eth-sri/constrained-diffusion.git
+```
+
 ## References
 
 - **STATIC** (Su et al., 2026): Sparse Transition Matrix-Accelerated Trie Index
 - **DINGO** (Suresh et al., NeurIPS 2025): Constrained Inference for Diffusion LLMs
+- **LAVE** (Zhang et al., ACM 2026): Lookahead-then-Verify: Reliable Constrained Decoding for Diffusion LLMs under Context-Free Grammars
+- **Constrained Decoding** (Mündler et al., NeurIPS 2025 DL4C Oral): Constrained Decoding of Diffusion LLMs with Context-Free Grammars
