@@ -1,72 +1,81 @@
-# SDSD: Sparse Deterministic Speculative Decoding
+# SDSD: Sparse Deterministic Speculative Decoding in Diffusion Language Models
 
-Combines **DINGO**'s dynamic programming logic with **STATIC**'s sparse indexing to achieve **O(K)** complexity for constrained decoding, where K << N (vocabulary size).
+SDSD combines **DINGO** (constrained decoding), **STATIC** (O(K) sparse indexing), **Herding** (intent recovery), and **Speculative Tree** (NFE reduction) for efficient grammar-constrained generation from diffusion LLMs.
 
-## Key Optimization
+## Key Components
 
-| Component | Original (DINGO) | Optimized (SDSD) |
-|-----------|------------------|------------------|
-| Transition cost | \( V_i(q, q') = \max_{t \in V} v_i(t) \) | Same formula, but iterate only over K valid tokens |
-| Complexity | O(\|Q\| · N) | O(\|Q\| · K) |
-| I/O | Full vocabulary scan | CSR slice: `P[q]` to `P[q+1]` |
+| Component | Role | Effect |
+|-----------|------|--------|
+| **STATIC** | CSR sparse DFA | O(N) → O(K) transition lookup |
+| **Herding** | Momentum for blocked intent | Faster intent recovery |
+| **Speculative Tree** | Draft + verify in rounds | NFE = T/τ instead of T |
 
-## Structure
+## Project Structure
 
 ```
 src/
-├── csr_dfa.py         # STATIC-style CSR format for DFA
-├── sparse_dingo.py    # B2: O(K) DINGO DP (STATIC + DINGO)
-├── baseline_dingo.py  # B1: O(N) DINGO baseline
-├── herding.py         # B3: Herding momentum for blocked intentions
-├── speculative_tree.py  # Self-Speculative Tree: NFE reduction
-├── sdsd.py            # SDSD: full pipeline
-├── benchmark_b1_b2.py # B1 vs B2 benchmark
-├── test_dllm_sdsd.py  # DLLM integration (LLaDA/Dream)
-├── test_sdsd.py       # Test suite
+├── csr_dfa.py           # STATIC-style CSR format for DFA
+├── baseline_dingo.py    # B1: O(N) DINGO baseline
+├── sparse_dingo.py      # B2: O(K) DINGO (STATIC + DINGO)
+├── herding.py           # B3: Herding momentum decoding
+├── speculative_tree.py  # Speculative tree + sdsd_multi_round
+├── sdsd.py              # SDSD pipeline exports
+├── dataset_loaders.py   # JSON-Mode-Eval, HumanEval, MBPP, GSM-Symbolic
+├── test_dllm_sdsd.py    # LLaDA/Dream integration
+├── benchmark_b1_b2.py   # B1 vs B2 benchmark
+├── test_sdsd.py         # Unit tests
 └── eval/
-    ├── evaluate.py    # B1/B2/B3/SDSD evaluation
-    ├── intent_recovery.py  # Intent recovery ablation
-    └── metrics.py     # Parse rate, constraint satisfaction
+    ├── evaluate.py
+    ├── intent_recovery.py
+    └── metrics.py
 ```
 
-## Usage
+## Installation
 
-```python
-from sdsd import (
-    build_csr_from_transition_dict,
-    sparse_dingo_dp,
-)
-
-# Define DFA: (state, token) -> next_state
-transitions = {(0, 0): 1, (0, 1): 0, (1, 2): 2}
-csr = build_csr_from_transition_dict(transitions, num_states=3, vocab_size=100)
-
-# Probability vectors from model (e.g., diffusion LLM)
-prob_vectors = [[0.9, 0.1, 0.0, ...], [0.0, 0.0, 1.0, ...]]
-
-result = sparse_dingo_dp(
-    csr, prob_vectors,
-    start_state=0,
-    live_states={2},
-)
-print(result.tokens)   # Optimal constrained sequence
-print(result.probability)
-```
-
-## UV install
 ```bash
+# uv (recommended)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.11
-uv pip install -r requirements.txt 
-uv sync
+uv pip install -r requirements.txt
 
-# or Dream-7B dependencies
-uv sync --extra dream
+# Dream-7B: transformers>=4.46
+# LLaDA-8B: transformers==4.38.2 (see requirements-llada.txt)
 ```
 
-## Cloning constrained-diffusion
+## Run Ablation Study
+
+The main experiment runner. Uses **JSON-Mode-Eval** by default, generates 64 tokens, and compares 5 methods: Baseline, STATIC+DINGO, Herding, Ablation3 (Spec-Tree), SDSD.
+
 ```bash
-git clone https://github.com/eth-sri/constrained-diffusion.git
+# Mock (no GPU, synthetic logits)
+python run_ablation.py --model dream --mock --dataset json-mode-eval --samples 10
+
+# Dream-7B (needs ~20GB GPU)
+python run_ablation.py --model dream --dataset json-mode-eval --samples 20
+
+# LLaDA-8B (needs ~16GB GPU)
+python run_ablation.py --model llada --dataset json-mode-eval --samples 20
+
+# With intent recovery experiment
+python run_ablation.py --model dream --dataset json-mode-eval --intent-recovery
+
+# Quick mock (16 tokens, smaller vocab)
+python run_ablation.py --model dream --mock --quick --samples 5
+
+# Custom output
+python run_ablation.py --model dream --output results/ablation_results_dream.json
+```
+
+**Output**: `results/ablation_results.json` (or `--output` path). Metrics: TTFT, Throughput, NFE, Parse Rate, Intent Recovery steps.
+
+See [docs/ablation.md](docs/ablation.md) for full design and results (Dream-7B, LLaDA-8B).
+
+## Dataset
+
+JSON-Mode-Eval is loaded automatically from Hugging Face. See [docs/download_data.md](docs/download_data.md) for other datasets.
+
+```bash
+# Datasets are fetched on first run; install: pip install datasets
 ```
 
 ## Run Tests
@@ -75,59 +84,29 @@ git clone https://github.com/eth-sri/constrained-diffusion.git
 cd src && python test_sdsd.py
 ```
 
+## Run DLLM Integration Test
+
+```bash
+cd src && python test_dllm_sdsd.py --mock         # No GPU
+cd src && python test_dllm_sdsd.py --model dream  # Dream-7B (~20GB)
+cd src && python test_dllm_sdsd.py --model llada  # LLaDA-8B (~16GB)
+```
+
 ## Run B1 vs B2 Benchmark
 
 ```bash
 cd src && python benchmark_b1_b2.py
 ```
 
-## Run DLLM Integration Test
+Output: `benchmark_results.txt` (latency, speedup, vocab scans).
 
-```bash
-cd src && python test_dllm_sdsd.py --mock         # No GPU: synthetic logits
-cd src && python test_dllm_sdsd.py --model dream  # Dream-7B (needs ~20GB GPU)
-cd src && python test_dllm_sdsd.py --model llada  # LLaDA-8B-Instruct (needs ~16GB GPU)
-```
-
-Requires: `pip install torch transformers`. Dream needs transformers>=4.46; LLaDA needs transformers==4.38.2.
-
-## Run B1/B2/B3/SDSD Evaluation
-
-```bash
-python run_experiments.py --model dream --mock         # Synthetic (no GPU)
-python run_experiments.py --model dream --samples 10   # Dream-7B (GPU)
-python run_experiments.py --model llada                # LLaDA-8B (GPU)
-python run_experiments.py --intent-recovery-only       # Intent recovery ablation only
-```
-
-## Run Ablation Study
-
-See [docs/ABLATION_EXPERIMENT_DESIGN.md](docs/ABLATION_EXPERIMENT_DESIGN.md) for full design.
-
-```bash
-python run_ablation.py --model dream --mock --samples 20   # Synthetic
-python run_ablation.py --model dream --samples 20           # Dream-7B
-python run_ablation.py --model dream --dataset json-mode-eval  # With dataset
-```
-
-Dataset download: [docs/DATASET_DOWNLOAD_GUIDE.md](docs/DATASET_DOWNLOAD_GUIDE.md)
-
-Output: `results/experiment_results.json` (or `--output` path). Metrics: Latency, NFE, TTFT, Success rate, Intent recovery steps.
-
-## Run Intent Recovery Ablation
-
-Compares B2 (STATIC+DINGO) vs Herding (SDSD) on recovery after perturbing: inject low-prob token at step t, measure steps until high-prob token is chosen again. Herding recovers faster due to momentum preservation.
+## Intent Recovery (Standalone)
 
 ```bash
 cd src && python -m eval.intent_recovery
 ```
 
-## Benchmark Output
-
-Output is written to `benchmark_results.txt`. Metrics:
-- **Latency (ms)**: Total time per block decode
-- **Speedup**: B2 vs B1 (expect 2–100x for N >> K)
-- **Vocab scans**: N (B1) vs K (B2) per transition
+Compares B2 vs Herding on recovery after perturbing a token. Herding recovers faster via momentum.
 
 ## References
 
