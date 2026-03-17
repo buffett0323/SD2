@@ -4,17 +4,20 @@ SDSD combines **DINGO** (constrained decoding), **STATIC** (O(K) sparse indexing
 
 ## TODO
 
-- [ ] Add accuracy metrics (e.g., parse rate, constraint satisfaction, pass@1)
-- [ ] Compare SDSD with LAVE (or other baselines)
-- [ ] Benchmark latency with warmup: exclude first 10 runs to avoid cold-start overhead
+- Add accuracy metrics (e.g., parse rate, constraint satisfaction, pass@1)
+- Compare SDSD with LAVE (or other baselines)
+- Benchmark latency with warmup: exclude first 10 runs to avoid cold-start overhead
+- Implementation check for herding, STATIC
 
 ## Key Components
 
-| Component | Role | Effect |
-|-----------|------|--------|
-| **STATIC** | CSR sparse DFA | O(N) → O(K) transition lookup |
-| **Herding** | Momentum for blocked intent | Faster intent recovery |
-| **Speculative Tree** | Draft + verify in rounds | NFE = T/τ instead of T |
+
+| Component            | Role                        | Effect                        |
+| -------------------- | --------------------------- | ----------------------------- |
+| **STATIC**           | CSR sparse DFA              | O(N) → O(K) transition lookup |
+| **Herding**          | Momentum for blocked intent | Faster intent recovery        |
+| **Speculative Tree** | Draft + verify in rounds    | NFE = T/τ instead of T        |
+
 
 ## Project Structure
 
@@ -70,19 +73,51 @@ python run_ablation.py --model dream --mock --quick --samples 5
 
 # Custom output
 python run_ablation.py --model dream --output results/ablation_results_dream.json
+
+# Exclude first 10 runs from latency metrics (cold-start warmup)
+python run_ablation.py --model dream --samples 30 --warmup 10
+
+# Full json-mode-eval test (syntactic_accuracy, constraint_pct) — needs GPU
+python run_ablation.py --model dream --dataset json-mode-eval --samples 30 --warmup 10
 ```
 
-**Output**: `results/ablation_results.json` (or `--output` path). Metrics: TTFT, Throughput, NFE, Parse Rate, Intent Recovery steps.
+**Output**: `results/ablation_results.json` (or `--output` path). Metrics: TTFT, Throughput, NFE, Parse Rate, Syntactic Accuracy, Constraint %, Intent Recovery steps.
+
+**Can syntactic_accuracy and constraint_pct be < 100%?**
+
+- **Constraint %**: Always 100% for constrained methods — every emitted token is a valid DFA transition by construction.
+- **Syntactic accuracy**: Can be < 100%. The DFA restricts *which* tokens are allowed, not *how* they combine. The model can produce valid-token sequences that decode to invalid JSON (e.g., `}{"`, truncated `{"a":`). With a strict JSON grammar DFA, you’d expect higher syntactic accuracy.
 
 See [docs/ablation.md](docs/ablation.md) for full design and results (Dream-7B, LLaDA-8B).
+
+## Unified Benchmark (SDSD vs Dgrammar vs LAVE)
+
+Compare Baseline, Ablations, SDSD, Dgrammar, and LAVE on JSON-Bench (jsonschema) with Dgrammar-style metrics:
+
+| Method | Syntactic | Functional | Mean Time | Median | P95 | Max | Constraint % |
+|--------|-----------|------------|-----------|--------|-----|-----|--------------|
+
+```bash
+# Run SDSD methods only (Baseline, Ablation1, Ablation2, Ablation3, SDSD)
+python run_unified_benchmark.py --methods baseline,ablation1,ablation2,ablation3,sdsd
+
+# Quick test (20 instances)
+python run_unified_benchmark.py --limit 20 --output results/unified
+
+# Aggregate results (SDSD + Dgrammar + LAVE if available)
+python aggregate_unified_results.py results/unified vendor/dgrammar/results
+
+# Or use the shell script (runs SDSD, Dgrammar, LAVE, then aggregates)
+bash run_unified_benchmark.sh
+```
+
+**Output**: `results/unified/unified_comparison.json` and printed table. Requires `vendor/CD4dLLM` for ETH syntactic/functional evaluation. See [docs/experiment_comparison.md](docs/experiment_comparison.md) for metric definitions.
 
 ## Dataset
 
 JSON-Mode-Eval is loaded automatically from Hugging Face. See [docs/download_data.md](docs/download_data.md) for other datasets.
 
-```bash
-# Datasets are fetched on first run; install: pip install datasets
-```
+
 
 ## Run Tests
 
@@ -114,8 +149,8 @@ cd src && python -m eval.intent_recovery
 
 Compares B2 vs Herding on recovery after perturbing a token. Herding recovers faster via momentum.
 
-
 ## Cloning Baseline Repos
+
 ```bash
 # STATIC
 git clone https://github.com/youtube/static-constraint-decoding.git
@@ -125,6 +160,9 @@ git clone https://github.com/eth-sri/constrained-diffusion.git
 
 # LAVE
 git clone https://github.com/zhangyitonggg/CD4dLLM.git
+
+# DGrammar
+git clone https://github.com/guan404ming/dgrammar.git
 ```
 
 ## References
@@ -133,3 +171,4 @@ git clone https://github.com/zhangyitonggg/CD4dLLM.git
 - **DINGO** (Suresh et al., NeurIPS 2025): Constrained Inference for Diffusion LLMs
 - **LAVE** (Zhang et al., ACM 2026): Lookahead-then-Verify: Reliable Constrained Decoding for Diffusion LLMs under Context-Free Grammars
 - **Constrained Decoding** (Mündler et al., NeurIPS 2025 DL4C Oral): Constrained Decoding of Diffusion LLMs with Context-Free Grammars
+

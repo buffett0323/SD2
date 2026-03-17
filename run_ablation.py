@@ -60,12 +60,58 @@ from test_dllm_sdsd import (
     build_json_dfa_from_tokenizer,
 )
 
+try:
+    from eval.metrics import check_json_parse
+except ImportError:
+    check_json_parse = None
+
 
 # Target: generate 64 tokens for NFE comparison
 TARGET_LENGTH = 64
 DRAFT_LENGTH = 16
 MOCK_VOCAB_SIZE = 32000  # N >= 32k for O(N) vs O(K) comparison
 MOCK_VOCAB_QUICK = 2048  # Smaller for --quick mock testing
+
+
+def _compute_constraint_satisfaction(
+    tokens: list[int], csr, start_state: int, live_states: set[int]
+) -> tuple[float, int, int]:
+    """
+    Trace tokens through DFA; return (valid_pct, valid_count, total).
+    Constraint % = fraction of tokens that were valid DFA transitions.
+    """
+    if not tokens:
+        return 100.0, 0, 0
+    q = start_state
+    valid = 0
+    for t in tokens:
+        found = False
+        for tt, qn in csr.get_transitions(q):
+            if tt == t:
+                q = qn
+                found = True
+                valid += 1
+                break
+        if not found:
+            break
+    total = len(tokens)
+    return (valid / total * 100.0) if total else 100.0, valid, total
+
+
+def _compute_syntactic_accuracy(
+    tokens: list[int], tokenizer, check_fn
+) -> bool | None:
+    """
+    Decode tokens to text and check if it parses as valid JSON.
+    Returns True/False if check_fn available and tokenizer present, else None.
+    """
+    if tokenizer is None or check_fn is None:
+        return None
+    try:
+        text = tokenizer.decode(tokens, skip_special_tokens=True)
+        return check_fn(text)
+    except Exception:
+        return False
 
 
 def _run_sequential_decode(
@@ -183,6 +229,7 @@ def run_one_sample(
     target_length,
     prompt,
     seed,
+    tokenizer=None,
     sample_idx: int = 0,
     total_samples: int = 1,
     verbose: bool = True,
@@ -206,7 +253,9 @@ def run_one_sample(
         start_state, live_states, target_length, prompt, seed,
         progress_cb=progress_cb,
     )
-    results["Baseline"] = {"tokens": tokens1, "success": succ1, "latency_ms": lat1, "nfe": nfe1}
+    c1, _, _ = _compute_constraint_satisfaction(tokens1, csr, start_state, live_states)
+    syn1 = _compute_syntactic_accuracy(tokens1, tokenizer, check_json_parse)
+    results["Baseline"] = {"tokens": tokens1, "success": succ1, "latency_ms": lat1, "nfe": nfe1, "constraint_pct": c1, "syntactic_ok": syn1}
 
     # Ablation 1: STATIC + DINGO O(K), NFE = T
     if verbose:
@@ -215,7 +264,9 @@ def run_one_sample(
         get_logits_fn, csr, start_state, live_states, target_length, prompt, seed,
         progress_cb=progress_cb,
     )
-    results["Ablation1"] = {"tokens": tokens2, "success": succ2, "latency_ms": lat2, "nfe": nfe2}
+    c2, _, _ = _compute_constraint_satisfaction(tokens2, csr, start_state, live_states)
+    syn2 = _compute_syntactic_accuracy(tokens2, tokenizer, check_json_parse)
+    results["Ablation1"] = {"tokens": tokens2, "success": succ2, "latency_ms": lat2, "nfe": nfe2, "constraint_pct": c2, "syntactic_ok": syn2}
 
     # Ablation 2: DINGO + Herding, NFE = T
     if verbose:
@@ -224,7 +275,9 @@ def run_one_sample(
         get_logits_fn, csr, start_state, live_states, target_length, prompt, seed,
         progress_cb=progress_cb,
     )
-    results["Ablation2"] = {"tokens": tokens3, "success": succ3, "latency_ms": lat3, "nfe": nfe3}
+    c3, _, _ = _compute_constraint_satisfaction(tokens3, csr, start_state, live_states)
+    syn3 = _compute_syntactic_accuracy(tokens3, tokenizer, check_json_parse)
+    results["Ablation2"] = {"tokens": tokens3, "success": succ3, "latency_ms": lat3, "nfe": nfe3, "constraint_pct": c3, "syntactic_ok": syn3}
 
     # Ablation 3: STATIC + Spec-Tree (argmax), model-in-loop, NFE = T/tau
     if verbose:
@@ -239,7 +292,9 @@ def run_one_sample(
         start_state, live_states, target_length, draft_length=DRAFT_LENGTH,
     )
     lat4 = (time.perf_counter() - t0) * 1000
-    results["Ablation3"] = {"tokens": tok4, "success": succ4, "latency_ms": lat4, "nfe": nfe4}
+    c4, _, _ = _compute_constraint_satisfaction(tok4, csr, start_state, live_states)
+    syn4 = _compute_syntactic_accuracy(tok4, tokenizer, check_json_parse)
+    results["Ablation3"] = {"tokens": tok4, "success": succ4, "latency_ms": lat4, "nfe": nfe4, "constraint_pct": c4, "syntactic_ok": syn4}
 
     # SDSD: STATIC + Herding + Tree, model-in-loop, NFE = T/tau
     if verbose:
@@ -250,7 +305,9 @@ def run_one_sample(
         start_state, live_states, target_length, draft_length=DRAFT_LENGTH,
     )
     lat5 = (time.perf_counter() - t0) * 1000
-    results["SDSD"] = {"tokens": tok5, "success": succ5, "latency_ms": lat5, "nfe": nfe5}
+    c5, _, _ = _compute_constraint_satisfaction(tok5, csr, start_state, live_states)
+    syn5 = _compute_syntactic_accuracy(tok5, tokenizer, check_json_parse)
+    results["SDSD"] = {"tokens": tok5, "success": succ5, "latency_ms": lat5, "nfe": nfe5, "constraint_pct": c5, "syntactic_ok": syn5}
 
     return results
 
@@ -332,6 +389,7 @@ def run_ablation(
     run_intent_recovery: bool = False,
     quick_mock: bool = False,
     verbose: bool = True,
+    warmup: int = 10,
 ) -> dict:
     """Run full ablation study for JSON-Mode-Eval."""
     device, has_gpu = get_device()
@@ -434,6 +492,7 @@ def run_ablation(
             target_length,
             prompt,
             seed,
+            tokenizer=tokenizer,
             sample_idx=si,
             total_samples=num_samples,
             verbose=verbose,
@@ -447,24 +506,39 @@ def run_ablation(
             )
             intent_recovery_results.append(ir)
 
-    # Aggregate
+    # Aggregate: exclude first `warmup` samples from latency metrics to avoid cold-start overhead
+    warmup_skip = min(warmup, num_samples)
     summary = {}
     for name in ["Baseline", "Ablation1", "Ablation2", "Ablation3", "SDSD"]:
         entries = all_results[name]
         n = len(entries)
         nfe_list = [e["nfe"] for e in entries]
         nfe_avg = sum(nfe_list) / n if n else 0
+        # Syntactic accuracy: % of samples that decode to valid JSON (None if no tokenizer)
+        syn_oks = [e.get("syntactic_ok") for e in entries if "syntactic_ok" in e and e["syntactic_ok"] is not None]
+        syntactic_accuracy = (sum(1 for x in syn_oks if x) / len(syn_oks) * 100) if syn_oks else None
+        # Constraint %: avg fraction of tokens that were valid DFA transitions
+        constraint_pcts = [e.get("constraint_pct", 100.0) for e in entries if "constraint_pct" in e]
+        constraint_avg = sum(constraint_pcts) / len(constraint_pcts) if constraint_pcts else 100.0
+        # Latency metrics: exclude warmup runs (fall back to all if fewer samples than warmup)
+        entries_timed = entries[warmup_skip:] if warmup_skip < n else entries
+        n_timed = len(entries_timed)
+        if n_timed == 0:
+            entries_timed = entries
+            n_timed = n
         summary[name] = {
-            "ttft_ms": sum(e["latency_ms"] for e in entries) / n if n else 0,
+            "ttft_ms": sum(e["latency_ms"] for e in entries_timed) / n_timed if n_timed else 0,
             "throughput_tok_s": (
-                sum(len(e["tokens"]) for e in entries) / max(1e-6, sum(e["latency_ms"] for e in entries) / 1000)
-                if n else 0
+                sum(len(e["tokens"]) for e in entries_timed) / max(1e-6, sum(e["latency_ms"] for e in entries_timed) / 1000)
+                if n_timed else 0
             ),
             "nfe_avg": nfe_avg,
             "nfe_min": min(nfe_list) if nfe_list else 0,
             "nfe_max": max(nfe_list) if nfe_list else 0,
             "rounds_avg": nfe_avg / 2 if name in ("Ablation3", "SDSD") else None,  # 每輪 = 2 NFE
             "parse_rate": sum(1 for e in entries if e["success"]) / n * 100 if n else 0,
+            "syntactic_accuracy": syntactic_accuracy,
+            "constraint_pct": constraint_avg,
             "n_samples": n,
         }
 
@@ -483,6 +557,7 @@ def run_ablation(
         "model": model_name,
         "mock": mock,
         "num_samples": num_samples,
+        "warmup": warmup,
         "target_length": target_length,
         "dataset": dataset or "default",
         "vocab_size": vocab_size,
@@ -501,11 +576,11 @@ def print_table(summary: dict, model_name: str, intent_recovery: float | None = 
         ("Ablation3", "STATIC + Spec-Tree", "O(K)", "N/A"),
         ("SDSD", "SDSD (Ours)", "O(K)", "Fast"),
     ]
-    print(f"\n{'='*120}")
+    print(f"\n{'='*140}")
     print(f"  SDSD Ablation — JSON-Mode-Eval (64 tokens) — {model_name.upper()}")
-    print(f"{'='*120}")
-    print(f"{'Method':<14} {'Technique':<22} {'Complexity':<8} {'NFE(64)':<20} {'TTFT(ms)':<12} {'Throughput':<12} {'Parse%':<10} {'Intent Rec':<12}")
-    print("-" * 120)
+    print(f"{'='*140}")
+    print(f"{'Method':<14} {'Technique':<22} {'Complexity':<8} {'NFE(64)':<20} {'TTFT(ms)':<12} {'Throughput':<12} {'Parse%':<10} {'SynAcc%':<10} {'Const%':<10} {'Intent Rec':<12}")
+    print("-" * 140)
     for key, tech, compl, ir_label in methods:
         s = summary.get(key, {})
         ir = ir_label
@@ -514,8 +589,11 @@ def print_table(summary: dict, model_name: str, intent_recovery: float | None = 
         nfe_str = f"{s.get('nfe_avg', 0):.1f}"
         if key in ("Ablation3", "SDSD") and s.get("nfe_min") is not None and s.get("nfe_max") is not None:
             nfe_str = f"{s.get('nfe_avg', 0):.1f} [{s['nfe_min']}-{s['nfe_max']}]"
-        print(f"{key:<14} {tech:<22} {compl:<8} {nfe_str:<20} {s.get('ttft_ms', 0):<12.2f} {s.get('throughput_tok_s', 0):<12.2f} {s.get('parse_rate', 0):<10.1f} {str(ir):<12}")
-    print(f"{'='*120}\n")
+        syn_acc = s.get("syntactic_accuracy")
+        syn_str = f"{syn_acc:.1f}" if syn_acc is not None else "N/A"
+        const_str = f"{s.get('constraint_pct', 100):.1f}"
+        print(f"{key:<14} {tech:<22} {compl:<8} {nfe_str:<20} {s.get('ttft_ms', 0):<12.2f} {s.get('throughput_tok_s', 0):<12.2f} {s.get('parse_rate', 0):<10.1f} {syn_str:<10} {const_str:<10} {str(ir):<12}")
+    print(f"{'='*140}\n")
 
 
 def main():
@@ -530,11 +608,12 @@ def main():
     parser.add_argument("--intent-recovery", action="store_true", help="Run intent recovery experiment")
     parser.add_argument("--quick", action="store_true", help="Quick mock: smaller vocab/length for testing")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-method progress")
+    parser.add_argument("--warmup", type=int, default=10, help="Exclude first N runs from latency metrics (cold-start)")
     parser.add_argument("--output", type=str, default="results/ablation_results.json")
     args = parser.parse_args()
 
     target_len = 16 if args.quick and args.mock else args.target_length
-    print(f"  Model: {args.model}, Mock: {args.mock}, Samples: {args.samples}, Dataset: {args.dataset}")
+    print(f"  Model: {args.model}, Mock: {args.mock}, Samples: {args.samples}, Warmup: {args.warmup}, Dataset: {args.dataset}")
     print(f"  Target: {target_len} tokens | Vocab: {'32k' if not args.quick else '2k'}{' (mock)' if args.mock else ''}")
     print(f"\n  Progress: Each sample runs 5 methods in order:")
     print(f"    1. Baseline (O(N))  2. STATIC+DINGO (O(K))  3. Herding  4. Ablation3  5. SDSD")
@@ -546,6 +625,7 @@ def main():
         run_intent_recovery=args.intent_recovery,
         quick_mock=args.quick,
         verbose=not args.quiet,
+        warmup=args.warmup,
     )
 
     print_table(

@@ -14,3 +14,9 @@ __pycache__/
 
 .env
 constrained-diffusion/
+
+# Cloned repositories
+vendor/static-constraint-decoding/
+vendor/constrained-diffusion/
+vendor/dgrammar/
+vendor/CD4dLLM/
