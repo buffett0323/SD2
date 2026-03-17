@@ -59,7 +59,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.11
 uv pip install -r requirements.txt 
 uv sync
-uv sync --extra dream # Dream-7B dependencies
+
+# or Dream-7B dependencies
+uv sync --extra dream
+```
+
+## Cloning constrained-diffusion
+```bash
+git clone https://github.com/eth-sri/constrained-diffusion.git
 ```
 
 ## Run Tests

@@ -114,14 +114,24 @@ def load_llada_model(device: torch.device):
             PreTrainedModel.mark_tied_weights_as_initialized = _orig_mark
 
 
+def _to_messages(prompt: str | list) -> list:
+    """Convert prompt to chat messages. Handles json-mode-eval list format."""
+    if isinstance(prompt, list) and prompt and isinstance(prompt[0], dict):
+        return prompt
+    return [{"role": "user", "content": str(prompt)}]
+
+
 def get_block_logits_dream(
-    model, tokenizer, prompt: str, block_length: int, device: torch.device
+    model, tokenizer, prompt: str | list, block_length: int, device: torch.device,
+    prefix_tokens: list[int] | None = None,
 ) -> tuple[list[list[float]], int]:
     """
     Run Dream forward pass with masked block, return probability vectors.
     Dream: logits at position i predict token at i+1.
+    prompt: str or list of messages (json-mode-eval format).
+    prefix_tokens: already-accepted tokens for multi-round generation.
     """
-    messages = [{"role": "user", "content": prompt}]
+    messages = _to_messages(prompt)
     inputs = tokenizer.apply_chat_template(
         messages, return_tensors="pt", return_dict=True, add_generation_prompt=True
     )
@@ -132,13 +142,19 @@ def get_block_logits_dream(
     if mask_id is None:
         mask_id = tokenizer.pad_token_id or 0
 
-    prompt_len = input_ids.shape[1]
-    block_ids = torch.full((1, block_length), mask_id, dtype=torch.long, device=device)
+    orig_prompt_len = input_ids.shape[1]
+    if prefix_tokens:
+        prefix = torch.tensor([prefix_tokens], dtype=torch.long, device=device)
+        block_ids = torch.cat([prefix, torch.full((1, block_length), mask_id, dtype=torch.long, device=device)], dim=1)
+        prompt_len = orig_prompt_len + len(prefix_tokens)
+    else:
+        block_ids = torch.full((1, block_length), mask_id, dtype=torch.long, device=device)
+        prompt_len = orig_prompt_len
     full_ids = torch.cat([input_ids, block_ids], dim=1)
 
     if attention_mask is not None:
         attn = torch.ones(1, full_ids.shape[1], device=device, dtype=torch.bfloat16)
-        attn[0, :prompt_len] = attention_mask[0].to(torch.bfloat16)
+        attn[0, :orig_prompt_len] = attention_mask[0].to(torch.bfloat16)
     else:
         attn = None
 
@@ -162,13 +178,14 @@ def get_block_logits_dream(
 
 
 def get_logits_for_position_dream(
-    model, tokenizer, prompt: str, prefix_tokens: list[int], device: torch.device
+    model, tokenizer, prompt: str | list, prefix_tokens: list[int], device: torch.device
 ) -> tuple[list[float], int]:
     """
     Step-by-step: 1 forward → logits for next position only. NFE = 1 per call.
     Used for sequential (Baseline) decoding where NFE = block_length.
+    prompt: str or list of messages (json-mode-eval format).
     """
-    messages = [{"role": "user", "content": prompt}]
+    messages = _to_messages(prompt)
     inputs = tokenizer.apply_chat_template(
         messages, return_tensors="pt", return_dict=True, add_generation_prompt=True
     )
@@ -208,12 +225,13 @@ def get_logits_for_position_dream(
 
 
 def get_logits_for_position_llada(
-    model, tokenizer, prompt: str, prefix_tokens: list[int], device: torch.device
+    model, tokenizer, prompt: str | list, prefix_tokens: list[int], device: torch.device
 ) -> tuple[list[float], int]:
     """
     Step-by-step: 1 forward → logits for next position only. NFE = 1 per call.
+    prompt: str or list of messages (json-mode-eval format).
     """
-    messages = [{"role": "user", "content": prompt}]
+    messages = _to_messages(prompt)
     prompt_str = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
@@ -241,13 +259,15 @@ def get_logits_for_position_llada(
 
 
 def get_block_logits_llada(
-    model, tokenizer, prompt: str, block_length: int, device: torch.device
+    model, tokenizer, prompt: str | list, block_length: int, device: torch.device,
+    prefix_tokens: list[int] | None = None,
 ) -> tuple[list[list[float]], int]:
     """
     Run LLaDA forward pass with masked block.
-    LLaDA uses different input format - prompt + mask tokens.
+    prompt: str or list of messages (json-mode-eval format).
+    prefix_tokens: already-accepted tokens for multi-round generation.
     """
-    messages = [{"role": "user", "content": prompt}]
+    messages = _to_messages(prompt)
     prompt_str = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
@@ -259,9 +279,14 @@ def get_block_logits_llada(
         mask_id = tokenizer.pad_token_id or 0
 
     prompt_len = input_ids.shape[1]
-    block_ids = torch.full(
-        (1, block_length), mask_id, dtype=torch.long, device=device
-    )
+    if prefix_tokens:
+        prefix = torch.tensor([prefix_tokens], dtype=torch.long, device=device)
+        block_ids = torch.cat([prefix, torch.full((1, block_length), mask_id, dtype=torch.long, device=device)], dim=1)
+        prompt_len = prompt_len + len(prefix_tokens)
+    else:
+        block_ids = torch.full(
+            (1, block_length), mask_id, dtype=torch.long, device=device
+        )
     full_ids = torch.cat([input_ids, block_ids], dim=1)
 
     with torch.no_grad():
@@ -280,11 +305,102 @@ def get_block_logits_llada(
     return prob_vectors, mask_id
 
 
-def get_synthetic_logits(vocab_size: int, block_length: int, seed: int = 42) -> list[list[float]]:
+def get_verify_logits_dream(
+    model, tokenizer, prompt: str | list, context_tokens: list[int], device: torch.device
+) -> list[list[float]]:
+    """
+    Verification forward: run model on prompt + context_tokens (no mask).
+    prompt: str or list of messages (json-mode-eval format).
+    """
+    messages = _to_messages(prompt)
+    inputs = tokenizer.apply_chat_template(
+        messages, return_tensors="pt", return_dict=True, add_generation_prompt=True
+    )
+    input_ids = inputs.input_ids.to(device)
+    attention_mask = inputs.attention_mask.to(device) if inputs.attention_mask is not None else None
+
+    if not context_tokens:
+        return []
+
+    context = torch.tensor([context_tokens], dtype=torch.long, device=device)
+    full_ids = torch.cat([input_ids, context], dim=1)
+
+    if attention_mask is not None:
+        attn = torch.ones(1, full_ids.shape[1], device=device, dtype=torch.bfloat16)
+        attn[0, : input_ids.shape[1]] = attention_mask[0].to(torch.bfloat16)
+    else:
+        attn = None
+
+    with torch.no_grad():
+        try:
+            out = model(full_ids, attention_mask=attn)
+        except TypeError:
+            out = model(full_ids)
+
+    prompt_len = input_ids.shape[1]
+    prob_vectors = []
+    for i in range(len(context_tokens)):
+        pos = prompt_len + i - 1
+        if pos < 0:
+            pos = 0
+        logit = out.logits[0, pos, :].float()
+        probs = F.softmax(logit, dim=-1).cpu().tolist()
+        prob_vectors.append(probs)
+    return prob_vectors
+
+
+def get_verify_logits_llada(
+    model, tokenizer, prompt: str | list, context_tokens: list[int], device: torch.device
+) -> list[list[float]]:
+    """Verification forward for LLaDA. prompt: str or list of messages."""
+    messages = _to_messages(prompt)
+    prompt_str = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    input_ids = tokenizer(prompt_str, return_tensors="pt")["input_ids"].to(device)
+
+    if not context_tokens:
+        return []
+
+    context = torch.tensor([context_tokens], dtype=torch.long, device=device)
+    full_ids = torch.cat([input_ids, context], dim=1)
+
+    with torch.no_grad():
+        out = model(full_ids)
+
+    prompt_len = input_ids.shape[1]
+    prob_vectors = []
+    for i in range(len(context_tokens)):
+        pos = prompt_len + i - 1
+        if pos < 0:
+            pos = 0
+        logit = out.logits[0, pos, :].float()
+        probs = F.softmax(logit, dim=-1).cpu().tolist()
+        prob_vectors.append(probs)
+    return prob_vectors
+
+
+def get_synthetic_logits(
+    vocab_size: int, block_length: int, seed: int = 42,
+    prefix_tokens: list[int] | None = None,
+) -> list[list[float]]:
     """Synthetic probability vectors for testing without GPU."""
-    torch.manual_seed(seed)
+    torch.manual_seed(seed + (len(prefix_tokens) if prefix_tokens else 0))
     prob_vectors = []
     for _ in range(block_length):
+        logits = torch.randn(vocab_size)
+        probs = F.softmax(logits, dim=-1).tolist()
+        prob_vectors.append(probs)
+    return prob_vectors
+
+
+def get_synthetic_verify_logits(
+    vocab_size: int, context_tokens: list[int], seed: int = 42
+) -> list[list[float]]:
+    """Synthetic verification logits for mock mode."""
+    torch.manual_seed(seed + len(context_tokens))
+    prob_vectors = []
+    for _ in range(len(context_tokens)):
         logits = torch.randn(vocab_size)
         probs = F.softmax(logits, dim=-1).tolist()
         prob_vectors.append(probs)
@@ -312,6 +428,52 @@ def build_simple_json_dfa(vocab_size: int) -> tuple[object, int, set]:
     }
     csr = build_csr_from_transition_dict(transitions, num_states=10, vocab_size=vocab_size)
     return csr, 0, {9}
+
+
+def build_json_dfa_from_tokenizer(tokenizer) -> tuple[object, int, set]:
+    """
+    Build JSON DFA using real tokenizer IDs. Maps common JSON structure tokens
+    to a permissive JSON-like DFA. Uses K << N for O(K) advantage.
+    """
+    vocab_size = tokenizer.vocab_size
+    # Get token IDs for JSON structure chars (single-token encodings)
+    def _tid(s: str) -> int | None:
+        ids = tokenizer.encode(s, add_special_tokens=False)
+        return ids[0] if len(ids) == 1 else None
+
+    t_lbrace = _tid("{")
+    t_rbrace = _tid("}")
+    t_quote = _tid('"')
+    t_colon = _tid(":")
+    t_comma = _tid(",")
+    t_lbracket = _tid("[")
+    t_rbracket = _tid("]")
+
+    # Build transitions: permissive JSON - any token from valid set
+    valid_tokens = []
+    for t in [t_lbrace, t_rbrace, t_quote, t_colon, t_comma, t_lbracket, t_rbracket]:
+        if t is not None:
+            valid_tokens.append(t)
+
+    # Add common alphanumeric / string tokens (first 1k that decode to printable)
+    for tid in range(min(1000, vocab_size)):
+        if tid not in valid_tokens:
+            try:
+                s = tokenizer.decode([tid])
+                if s and len(s) <= 2 and s.isprintable():
+                    valid_tokens.append(tid)
+            except Exception:
+                pass
+        if len(valid_tokens) >= 200:  # Cap K for O(K) benefit
+            break
+
+    if not valid_tokens:
+        valid_tokens = list(range(min(100, vocab_size)))
+
+    # Permissive: start -> accept any valid token -> live state
+    transitions = {(0, t): 1 for t in valid_tokens} | {(1, t): 1 for t in valid_tokens}
+    csr = build_csr_from_transition_dict(transitions, num_states=2, vocab_size=vocab_size)
+    return csr, 0, {1}
 
 
 def build_permissive_dfa(vocab_size: int, valid_tokens: list[int] | None = None) -> tuple[object, int, set]:

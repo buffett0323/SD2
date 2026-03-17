@@ -1,0 +1,87 @@
+{
+  "model": "dream",
+  "mock": false,
+  "num_samples": 10,
+  "target_length": 64,
+  "dataset": "json-mode-eval",
+  "vocab_size": 151643,
+  "summary": {
+    "Baseline": {
+      "ttft_ms": 11738.530232012272,
+      "throughput_tok_s": 5.452130610480085,
+      "nfe_avg": 64.0,
+      "nfe_min": 64,
+      "nfe_max": 64,
+      "rounds_avg": null,
+      "parse_rate": 100.0,
+      "n_samples": 10
+    },
+    "Ablation1": {
+      "ttft_ms": 7425.031873025,
+      "throughput_tok_s": 8.619491618953285,
+      "nfe_avg": 64.0,
+      "nfe_min": 64,
+      "nfe_max": 64,
+      "rounds_avg": null,
+      "parse_rate": 100.0,
+      "n_samples": 10
+    },
+    "Ablation2": {
+      "ttft_ms": 7941.137865185738,
+      "throughput_tok_s": 8.059298438902381,
+      "nfe_avg": 64.0,
+      "nfe_min": 64,
+      "nfe_max": 64,
+      "rounds_avg": null,
+      "parse_rate": 100.0,
+      "n_samples": 10
+    },
+    "Ablation3": {
+      "ttft_ms": 2173.4769713133574,
+      "throughput_tok_s": 29.445906648519493,
+      "nfe_avg": 8.0,
+      "nfe_min": 8,
+      "nfe_max": 8,
+      "rounds_avg": 4.0,
+      "parse_rate": 100.0,
+      "n_samples": 10
+    },
+    "SDSD": {
+      "ttft_ms": 2862.259122170508,
+      "throughput_tok_s": 22.359960181196847,
+      "nfe_avg": 8.0,
+      "nfe_min": 8,
+      "nfe_max": 8,
+      "rounds_avg": 4.0,
+      "parse_rate": 100.0,
+      "n_samples": 10
+    }
+  },
+  "nfe_per_sample": {
+    "Ablation3": [
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8
+    ],
+    "SDSD": [
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8,
+      8
+    ]
+  },
+  "intent_recovery_avg_steps": null
+}

@@ -17,8 +17,8 @@ from typing import Iterator
 
 @dataclass
 class EvalSample:
-    """Single evaluation sample."""
-    prompt: str
+    """Single evaluation sample. prompt can be str or list of chat messages."""
+    prompt: str | list  # str for simple prompts, list[dict] for chat format (json-mode-eval)
     schema_or_constraint: str | None = None
     expected_output: str | None = None
     dataset: str = ""
@@ -28,20 +28,21 @@ class EvalSample:
 def load_json_mode_eval(split: str = "train", cache_dir: str | Path | None = None) -> list[EvalSample]:
     """
     Load JSON-Mode-Eval (NousResearch/json-mode-eval).
-    Tests complex nested JSON schema compliance.
+    prompt is a list of messages: [{"role":"system","content":"..."},{"role":"user","content":"..."}]
     """
     try:
         from datasets import load_dataset
     except ImportError:
         raise ImportError("Install datasets: pip install datasets")
 
-    ds = load_dataset("NousResearch/json-mode-eval", split=split, trust_remote_code=True, cache_dir=str(cache_dir) if cache_dir else None)
+    ds = load_dataset("NousResearch/json-mode-eval", split=split, cache_dir=str(cache_dir) if cache_dir else None)
     samples = []
     for i, row in enumerate(ds):
         prompt = row.get("prompt", row.get("system_prompt", "")) or ""
         schema = row.get("schema", row.get("expected", ""))
+        # json-mode-eval uses prompt as list of messages; keep as-is for apply_chat_template
         samples.append(EvalSample(
-            prompt=str(prompt),
+            prompt=prompt if isinstance(prompt, list) else str(prompt),
             schema_or_constraint=str(schema) if schema else None,
             dataset="json-mode-eval",
             id=f"json_{i}",
@@ -108,7 +109,7 @@ def load_gsm_symbolic(config: str = "main", split: str = "test", cache_dir: str 
     except ImportError:
         raise ImportError("Install datasets: pip install datasets")
 
-    ds = load_dataset("apple/GSM-Symbolic", config, split=split, trust_remote_code=True, cache_dir=str(cache_dir) if cache_dir else None)
+    ds = load_dataset("apple/GSM-Symbolic", config, split=split, cache_dir=str(cache_dir) if cache_dir else None)
     samples = []
     for i, row in enumerate(ds):
         prompt = row.get("question", row.get("modified_question", "")) or ""

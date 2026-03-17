@@ -47,6 +47,36 @@ class SpeculativeResult:
 
 
 # ---------------------------------------------------------------------------
+# Verification: second forward pass to check model supports draft tokens
+# ---------------------------------------------------------------------------
+
+def verify_draft_with_forward(
+    draft_tokens: list[int],
+    get_verify_logits_fn: Callable[[list[int]], list[list[float]]],
+    threshold: float = 0.0,
+) -> int:
+    """
+    Verification Step C: Run second forward pass with draft as context.
+    Returns number of tokens accepted (first i where p_i[t_i] <= threshold).
+    NFE = 1 for this verification call.
+    """
+    if not draft_tokens:
+        return 0
+    prob_vectors = get_verify_logits_fn(draft_tokens)
+    n = min(len(draft_tokens), len(prob_vectors))
+    vocab_size = len(prob_vectors[0]) if prob_vectors else 0
+    for i in range(n):
+        p = prob_vectors[i]
+        t = draft_tokens[i]
+        if t >= len(p):
+            return i
+        prob_t = p[t] if t < len(p) else 0.0
+        if prob_t <= threshold:
+            return i
+    return n
+
+
+# ---------------------------------------------------------------------------
 # Step 2a: Tree Construction (STATIC CSR → K valid tokens per node)
 # ---------------------------------------------------------------------------
 
@@ -376,3 +406,147 @@ def speculative_decode_lazy(
     return speculative_decode(
         csr, prob_vectors, start_state, live_states, draft_length, use_lazy=True
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-round SDSD with model-in-loop and verification
+# ---------------------------------------------------------------------------
+
+def sdsd_multi_round(
+    csr: CSRTransitionMatrix,
+    get_block_logits_fn: Callable[[list[int], int], list[list[float]]],
+    get_verify_logits_fn: Callable[[list[int]], list[list[float]]],
+    start_state: int,
+    live_states: set[int],
+    target_length: int,
+    draft_length: int = 16,
+    verify_threshold: float = 0.0,
+) -> tuple[list[int], int, int, bool]:
+    """
+    SDSD with model-in-loop: generate target_length tokens via multi-round
+    draft + verify. Each round: 1 forward (draft) + 1 forward (verify) = 2 NFE.
+    NFE = 2 * num_rounds = 2 * ceil(target_length / tau) where tau = avg accepted.
+
+    get_block_logits_fn(prefix_tokens, block_len) -> prob_vectors
+    get_verify_logits_fn(prefix_plus_draft) -> prob_vectors for verification
+
+    Returns (tokens, nfe, n_accepted_total, success).
+    """
+    tokens: list[int] = []
+    q = start_state
+    nfe = 0
+
+    while len(tokens) < target_length:
+        gamma = min(draft_length, target_length - len(tokens))
+        if gamma <= 0:
+            break
+
+        # Step A: Self-Drafting - 1 forward for block logits
+        prob_vectors = get_block_logits_fn(tokens, gamma)
+        nfe += 1
+
+        if not prob_vectors:
+            break
+
+        # Step B: Grammar-Legal Tree with Herding (O(K) per node)
+        try:
+            from .herding import herding_decode
+        except ImportError:
+            from herding import herding_decode
+
+        r = herding_decode(csr, prob_vectors, q, live_states, block_length=gamma)
+        draft = r.tokens
+        q = r.final_state
+
+        if not draft:
+            break
+
+        # Step C: Verification - second forward pass
+        context = tokens + draft
+        all_verify_probs = get_verify_logits_fn(context)
+        nfe += 1
+        # all_verify_probs[i] predicts context[i]; we need probs for draft positions
+        verify_probs = all_verify_probs[len(tokens):] if len(all_verify_probs) > len(tokens) else []
+
+        n_accepted = 0
+        for i in range(min(len(draft), len(verify_probs))):
+            p = verify_probs[i]
+            t = draft[i]
+            if t >= len(p) or p[t] <= verify_threshold:
+                break
+            n_accepted += 1
+
+        # Update state for accepted tokens
+        for i in range(n_accepted):
+            for tt, qn in csr.get_transitions(q):
+                if tt == draft[i]:
+                    q = qn
+                    break
+
+        tokens.extend(draft[:n_accepted])
+        if n_accepted < len(draft):
+            break  # Verification rejected some; stop round
+
+    success = q in live_states and len(tokens) >= target_length
+    return tokens[:target_length], nfe, len(tokens), success
+
+
+def sdsd_multi_round_argmax(
+    csr: CSRTransitionMatrix,
+    get_block_logits_fn: Callable[[list[int], int], list[list[float]]],
+    get_verify_logits_fn: Callable[[list[int]], list[list[float]]],
+    start_state: int,
+    live_states: set[int],
+    target_length: int,
+    draft_length: int = 16,
+    verify_threshold: float = 0.0,
+) -> tuple[list[int], int, int, bool]:
+    """
+    Ablation 3: STATIC + Spec-Tree with argmax (no Herding), model-in-loop.
+    Same as sdsd_multi_round but uses argmax instead of Herding for path selection.
+    """
+    tokens: list[int] = []
+    q = start_state
+    nfe = 0
+
+    while len(tokens) < target_length:
+        gamma = min(draft_length, target_length - len(tokens))
+        if gamma <= 0:
+            break
+
+        prob_vectors = get_block_logits_fn(tokens, gamma)
+        nfe += 1
+
+        if not prob_vectors:
+            break
+
+        draft, q = _traverse_lazy_argmax(csr, prob_vectors, q, live_states, gamma)
+
+        if not draft:
+            break
+
+        context = tokens + draft
+        all_verify_probs = get_verify_logits_fn(context)
+        nfe += 1
+        verify_probs = all_verify_probs[len(tokens):] if len(all_verify_probs) > len(tokens) else []
+
+        n_accepted = 0
+        for i in range(min(len(draft), len(verify_probs))):
+            p = verify_probs[i]
+            t = draft[i]
+            if t >= len(p) or p[t] <= verify_threshold:
+                break
+            n_accepted += 1
+
+        for i in range(n_accepted):
+            for tt, qn in csr.get_transitions(q):
+                if tt == draft[i]:
+                    q = qn
+                    break
+
+        tokens.extend(draft[:n_accepted])
+        if n_accepted < len(draft):
+            break
+
+    success = q in live_states and len(tokens) >= target_length
+    return tokens[:target_length], nfe, len(tokens), success
