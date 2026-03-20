@@ -13,6 +13,7 @@ Reference:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,10 @@ class DINGOResult:
     final_state: int
     probability: float
     success: bool
+
+
+def _log_prob(p: float) -> float:
+    return math.log(p) if p > 0.0 else float("-inf")
 
 
 def compute_transition_costs_sparse(
@@ -77,6 +82,7 @@ def sparse_dingo_dp(
     start_state: int,
     live_states: set[int],
     block_length: int | None = None,
+    initial_log_probs: dict[int, float] | None = None,
 ) -> DINGOResult:
     """
     DINGO Dynamic Programming with O(K) sparse transition cost computation.
@@ -84,9 +90,10 @@ def sparse_dingo_dp(
     Args:
         csr: CSR format DFA (STATIC sparse indexing)
         prob_vectors: v_1, ..., v_d - probability vectors at each position
-        start_state: q0
+        start_state: q0 (used only if ``initial_log_probs`` is None)
         live_states: Ql - states that can reach accepting states
         block_length: d (default: len(prob_vectors))
+        initial_log_probs: optional log π0(q); if set, overrides single-state init
     
     Returns:
         DINGOResult with optimal token sequence
@@ -97,15 +104,20 @@ def sparse_dingo_dp(
     
     vocab_size = len(prob_vectors[0]) if prob_vectors else csr.vocab_size
     
-    # Initialize DP tables
-    # W[i, q] = max probability to reach state q in i steps
+    # W[i, q] = max log-probability to reach state q in i steps (natural log)
+    neg_inf = float("-inf")
     W: dict[tuple[int, int], float] = {}
     Pr: dict[tuple[int, int], tuple[int | None, int | None]] = {}
-    
+
     for q in range(csr.num_states):
-        W[(0, q)] = 0.0
+        W[(0, q)] = neg_inf
         Pr[(0, q)] = (None, None)
-    W[(0, start_state)] = 1.0
+    if initial_log_probs is not None:
+        for q, lv in initial_log_probs.items():
+            if 0 <= q < csr.num_states and math.isfinite(lv):
+                W[(0, q)] = max(W[(0, q)], lv)
+    else:
+        W[(0, start_state)] = 0.0
     
     # Precompute transition costs for each position (O(d * |Q| * K) total)
     all_Vi: list[dict[tuple[int, int], float]] = []
@@ -124,15 +136,17 @@ def sparse_dingo_dp(
         Ti = all_Ti[i - 1]
         
         for q in range(csr.num_states):
-            best_val = 0.0
+            best_val = neg_inf
             best_prev: tuple[int | None, int | None] = (None, None)
-            
+
             for q_prime in range(csr.num_states):
                 key = (q, q_prime)
                 if key not in Vi:
                     continue
-                prev_prob = W.get((i - 1, q_prime), 0.0)
-                cand = prev_prob * Vi[key]
+                prev_log = W.get((i - 1, q_prime), neg_inf)
+                if prev_log == neg_inf:
+                    continue
+                cand = prev_log + _log_prob(Vi[key])
                 if cand > best_val:
                     best_val = cand
                     best_prev = (q_prime, Ti[key])
@@ -142,14 +156,14 @@ def sparse_dingo_dp(
     
     # Find best live state
     q_max = -1
-    max_prob = 0.0
+    max_log = neg_inf
     for q in live_states:
-        p = W.get((d, q), 0.0)
-        if p > max_prob:
-            max_prob = p
+        lv = W.get((d, q), neg_inf)
+        if lv > max_log:
+            max_log = lv
             q_max = q
-    
-    if q_max < 0 or max_prob <= 0:
+
+    if q_max < 0 or not math.isfinite(max_log):
         return DINGOResult(
             tokens=[],
             final_state=start_state,
@@ -170,6 +184,6 @@ def sparse_dingo_dp(
     return DINGOResult(
         tokens=tokens,
         final_state=q_max,
-        probability=max_prob,
+        probability=math.exp(max_log),
         success=True,
     )

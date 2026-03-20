@@ -398,6 +398,12 @@ def main():
     parser.add_argument("--mock", action="store_true", help="Use synthetic (no GPU)")
     parser.add_argument("--skip-slow", action="store_true",
                         help="Skip slow methods (baseline). Use for faster runs.")
+    parser.add_argument("--steps", type=int, default=128,
+                        help="Diffusion steps (match Dgrammar/LAVE T; default 128)")
+    parser.add_argument("--block-length", type=int, default=32,
+                        help="Block length for generate_diffusion_sdsd (default 32)")
+    parser.add_argument("--gen-length", type=int, default=GEN_LENGTH,
+                        help="Generation length in tokens (default 256)")
     args = parser.parse_args()
 
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
@@ -486,7 +492,9 @@ def main():
                 try:
                     r = _run_diffusion_sdsd(
                         instance, model, tokenizer, method, device,
-                        gen_length=GEN_LENGTH, steps=128, block_length=32,
+                        gen_length=args.gen_length,
+                        steps=args.steps,
+                        block_length=args.block_length,
                     )
                 except Exception as e:
                     pbar.write(f"  {instance['instance_id']}: {method} failed: {e}")

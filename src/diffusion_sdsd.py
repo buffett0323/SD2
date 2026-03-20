@@ -54,6 +54,13 @@ def _logits_to_prob_list(logits_1d: torch.Tensor, vocab_size: int) -> list[float
     return prob_list
 
 
+def _clear_bidi_gap_ctx(ctx: dict[str, Any] | None) -> None:
+    if ctx is None:
+        return
+    ctx.pop("bidi_tokens", None)
+    ctx.pop("bidi_positions", None)
+
+
 def _bidirectional_frontier_pick(
     logits_1d: torch.Tensor,
     checker: TokenChecker,
@@ -63,6 +70,9 @@ def _bidirectional_frontier_pick(
     """
     Multi-mask gap Viterbi on JSON DFA + fixed right suffix; schema-check the
     proposed chunk, then return first token (approximate CFG via DFA + verify).
+
+    On success, stores the full optimal gap in ``ctx`` (``bidi_tokens``,
+    ``bidi_positions``) so the diffusion loop can commit every mask in the gap.
     """
     x = ctx["x"]
     focus_pos: int = ctx["focus_pos"]
@@ -75,6 +85,7 @@ def _bidirectional_frontier_pick(
 
     seq_len = x.shape[1]
     if focus_pos >= seq_len or int(x[0, focus_pos].item()) != mask_id:
+        _clear_bidi_gap_ctx(ctx)
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
 
     k = 0
@@ -96,6 +107,7 @@ def _bidirectional_frontier_pick(
     prefix_tokens = x[0, gen_start:focus_pos].tolist()
     q_left = dfa_run(csr, json_start_state, prefix_tokens)
     if q_left is None:
+        _clear_bidi_gap_ctx(ctx)
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
 
     prob_vectors: list[list[float]] = []
@@ -106,16 +118,22 @@ def _bidirectional_frontier_pick(
         prob_vectors.append(_logits_to_prob_list(logits_seq[pos], vocab_size))
 
     if len(prob_vectors) != k:
+        _clear_bidi_gap_ctx(ctx)
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
 
     res = bidirectional_gap_dingo(csr, q_left, prob_vectors, suffix, live_states)
     if not res.success or not res.tokens:
+        _clear_bidi_gap_ctx(ctx)
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
 
     first = res.tokens[0]
     bias = checker.compute_mask(vocab_size=vocab_size)
     if first < bias.shape[0] and bool(bias[first].item()):
+        _clear_bidi_gap_ctx(ctx)
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+
+    ctx["bidi_tokens"] = res.tokens
+    ctx["bidi_positions"] = list(range(focus_pos, focus_pos + len(res.tokens)))
     return first
 
 
@@ -336,7 +354,10 @@ def generate_diffusion_sdsd(
 
     frontier_picker(logits_1d, checker, vocab_size, ctx=None) -> token_id
     When ``bidi_csr`` is set, ``ctx`` is passed with x, focus_pos, logits_seq for
-    bidirectional gap Viterbi (see ``make_frontier_picker("bidi")``).
+    bidirectional gap Viterbi (see ``make_frontier_picker("bidi")``).  The full
+    gap is written to ``x0`` with boosted confidence and ``topk`` batch size at
+    least the gap length (capped by ``max_batch_size``) so the Viterbi tokens
+    commit together.
     """
     start_time = time.monotonic()
     x = torch.full((1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
@@ -388,6 +409,7 @@ def generate_diffusion_sdsd(
 
                 mask_index = x == mask_id
                 x0 = torch.argmax(logits_with_noise, dim=-1)
+                bidi_ctx = None
 
                 if remasking == "low_confidence":
                     p = F.softmax(logits.to(torch.float64), dim=-1)
@@ -401,7 +423,6 @@ def generate_diffusion_sdsd(
 
                 # SDSD frontier: use our picker instead of argmax
                 if consume_idx < x.shape[1] and mask_index[0, consume_idx]:
-                    bidi_ctx = None
                     if bidi_csr is not None and bidi_live_states is not None:
                         bidi_ctx = {
                             "x": x,
@@ -420,10 +441,20 @@ def generate_diffusion_sdsd(
                         bidi_ctx,
                     )
                     if tok < 0:
+                        _clear_bidi_gap_ctx(bidi_ctx)
                         bias = checker.compute_mask(vocab_size=vocab_size)
                         logits_with_noise[0, consume_idx, bias] = -np.inf
                         tok = torch.argmax(logits_with_noise[0, consume_idx]).item()
                     x0[0, consume_idx] = tok
+                    if bidi_ctx is not None and bidi_ctx.get("bidi_tokens"):
+                        if mask_index[0, consume_idx]:
+                            x0_p[0, consume_idx] = 1.0
+                        focus = consume_idx
+                        for rel_pos, gap_tok in enumerate(bidi_ctx["bidi_tokens"][1:], start=1):
+                            abs_pos = focus + rel_pos
+                            if abs_pos < x.shape[1] and mask_index[0, abs_pos]:
+                                x0[0, abs_pos] = gap_tok
+                                x0_p[0, abs_pos] = 1.0
 
                 x0 = torch.where(mask_index, x0, x)
                 confidence = torch.where(mask_index, x0_p, -np.inf)
@@ -434,6 +465,10 @@ def generate_diffusion_sdsd(
 
                 remaining = n_scheduled - tokens_placed_this_step
                 batch_k = min(current_batch, remaining, n_available)
+                if bidi_ctx is not None and bidi_ctx.get("bidi_tokens"):
+                    min_gap = len(bidi_ctx["bidi_tokens"])
+                    # Unmask the whole bidi gap in one topk (not only current_batch).
+                    batch_k = min(max(batch_k, min_gap), n_available, max_batch_size)
                 if batch_k == 0:
                     break
 
@@ -443,11 +478,18 @@ def generate_diffusion_sdsd(
                     yield x, resamples, False, total_violations, total_remasks, total_grammar_checks
                     return
 
+                bidi_commit: set[int] = set()
+                if bidi_ctx is not None:
+                    bidi_commit = set(bidi_ctx.get("bidi_positions", []))
+
                 positions = []
                 for idx in select_indices:
                     pos = idx.item()
                     vocab_idx = x0[0, pos].item()
-                    if logits_with_noise[0, pos, vocab_idx] == -np.inf:
+                    if (
+                        logits_with_noise[0, pos, vocab_idx] == -np.inf
+                        and pos not in bidi_commit
+                    ):
                         continue
                     x[0, pos] = x0[0, pos]
                     positions.append(pos)
@@ -464,6 +506,7 @@ def generate_diffusion_sdsd(
                 if violator < 0:
                     consume_idx = new_idx
                     current_batch = min(current_batch * 2, max_batch_size)
+                    _clear_bidi_gap_ctx(bidi_ctx)
                 else:
                     total_violations += 1
                     consume_idx = new_idx

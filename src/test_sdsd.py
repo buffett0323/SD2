@@ -23,7 +23,11 @@ from sparse_dingo import (
 from baseline_dingo import baseline_dingo_dp
 from herding import herding_decode, HerdingResult
 from speculative_tree import speculative_decode, SpeculativeResult
-from bidirectional_dingo import bidirectional_gap_dingo, states_compatible_with_suffix
+from bidirectional_dingo import (
+    bidirectional_gap_dingo,
+    segmented_bidirectional_dingo,
+    states_compatible_with_suffix,
+)
 
 
 def test_bidirectional_gap_dingo():
@@ -53,7 +57,21 @@ def test_bidirectional_gap_dingo():
     assert 1 in good
     r2 = bidirectional_gap_dingo(csr, 0, p_only, [1], live)
     assert r2.success and r2.tokens == [0]
-    print(f"  k=1, suffix=[1]: tokens={r2.tokens}")
+    assert r2.final_state == 2, "final_state should be after consuming suffix"
+    print(f"  k=1, suffix=[1]: tokens={r2.tokens}, final_state={r2.final_state}")
+
+    pv1 = [0.0] * 10
+    pv1[1] = 1.0
+    seg = segmented_bidirectional_dingo(
+        csr,
+        0,
+        [{"type": "fixed", "tokens": [0]}, {"type": "mask", "probs": [pv1]}],
+        [],
+        live,
+    )
+    assert seg.success and seg.tokens == [0, 1] and abs(seg.probability - 1.0) < 1e-9
+    print(f"  segmented fixed+mask: tokens={seg.tokens}")
+
     print("  ✓ Bidirectional gap DINGO OK\n")
 
 

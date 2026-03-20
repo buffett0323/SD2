@@ -112,7 +112,13 @@ python aggregate_unified_results.py results/unified vendor/dgrammar/results
 
 # Or use the shell script (runs SDSD, Dgrammar, LAVE, then aggregates)
 bash run_unified_benchmark.sh
+
+# SDSD/BiDi vs LAVE — same LLaDA + JSON-Bench + diffusion steps (documented knobs)
+python run_lave_sdsd_compare.py --methods sdsd,bidi --limit 20 --output results/lave_sdsd_compare
+python run_lave_sdsd_compare.py --methods sdsd,bidi --limit 272 --run-lave --aggregate   # needs vendor/dgrammar
 ```
+
+See [docs/lave_sdsd_compare.md](docs/lave_sdsd_compare.md) for aligned config and prerequisites.
 
 **Output**: `results/unified/unified_comparison.json` and printed table. Requires `vendor/CD4dLLM` for ETH syntactic/functional evaluation. See [docs/experiment_comparison.md](docs/experiment_comparison.md) for metric definitions.
 
