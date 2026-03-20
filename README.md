@@ -101,6 +101,9 @@ Compare Baseline, Ablations, SDSD, Dgrammar, and LAVE on JSON-Bench (jsonschema)
 # Run SDSD methods only (Baseline, Ablation1, Ablation2, Ablation3, SDSD)
 python run_unified_benchmark.py --methods baseline,ablation1,ablation2,ablation3,sdsd
 
+# BiDi: bidirectional gap Viterbi on JSON DFA + fixed right suffix (vs LAVE-style sampling)
+python run_unified_benchmark.py --methods bidi --limit 20 --output results/unified
+
 # Quick test (20 instances)
 python run_unified_benchmark.py --limit 20 --output results/unified
 
@@ -163,6 +166,8 @@ If SDSD produces garbage output while Dgrammar produces valid JSON:
 2. **ETH checker (Syntactic/Functional):** Requires `vendor/CD4dLLM`. Aggregate merges instance data (schema, input, output) for validation. If checker fails to load, Syntactic/Functional will be 0.
 
 3. **Debug script:** `python debug_diffusion.py` compares Dgrammar vs SDSD on one instance (needs GPU + llguidance).
+
+4. **ablation2 (Herding) in diffusion:** Uses a single `HerdingMomentumState` per instance so `w` persists across all frontier picks and violator retries within `generate_diffusion_sdsd` (not reset each step).
 
 ## Cloning Baseline Repos
 

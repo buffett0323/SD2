@@ -27,12 +27,79 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class HerdingMomentumState:
+    """
+    Persistent Herding momentum across many frontier picks (e.g. diffusion steps).
+
+    w starts at zero; each constrained step does w <- w + p - e_{t*} on the full vocab.
+    prev_token is the last chosen token (for optional delta tie-break).
+    """
+
+    w: list[float] | None = None
+    prev_token: int | None = None
+
+    def ensure_w(self, vocab_size: int) -> list[float]:
+        if self.w is None or len(self.w) != vocab_size:
+            self.w = [0.0] * vocab_size
+        return self.w
+
+
+@dataclass
 class HerdingResult:
     """Result of Herding constrained decoding."""
     tokens: list[int]
     final_state: int
     momentum_trace: list[list[float]]  # w at each step (for analysis)
     success: bool
+
+
+def herding_single_constrained_step(
+    prob_vector: list[float],
+    csr: "CSRTransitionMatrix",
+    start_state: int,
+    w: list[float],
+    prev_token: int | None,
+    delta: float = 0.0,
+) -> tuple[int | None, bool]:
+    """
+    One step of constrained Herding with external momentum w (updated in place).
+
+    score(t) = w[t] + p[t] + (delta if t == prev_token else 0)  for t in V_valid(start_state)
+    Pick argmax; then w <- w + p - e_{t*}.
+
+    Returns (chosen_token, True) or (None, False) if no valid transition.
+    """
+    vocab_size = len(w)
+    if len(prob_vector) < vocab_size:
+        prob_vector = list(prob_vector) + [0.0] * (vocab_size - len(prob_vector))
+
+    transitions = csr.get_transitions(start_state)
+    if not transitions:
+        return None, False
+
+    best_t: int | None = None
+    best_q_next: int | None = None
+    best_score = float("-inf")
+
+    for t, q_next in transitions:
+        if t < 0 or t >= vocab_size:
+            continue
+        score = w[t] + prob_vector[t]
+        if delta > 0 and prev_token is not None and t == prev_token:
+            score += delta
+        if score > best_score:
+            best_score = score
+            best_t = t
+            best_q_next = q_next
+
+    if best_t is None or best_q_next is None:
+        return None, False
+
+    for j in range(vocab_size):
+        w[j] = w[j] + prob_vector[j]
+    w[best_t] -= 1.0
+
+    return best_t, True
 
 
 def herding_decode(

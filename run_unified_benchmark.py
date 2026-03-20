@@ -116,10 +116,18 @@ def _run_diffusion_sdsd(
 ) -> dict:
     """Run SDSD diffusion: our DINGO/Herding at frontier, same T/steps as Dgrammar."""
     from diffusion_sdsd import generate_diffusion_sdsd, make_frontier_picker
+    from herding import HerdingMomentumState
+
     prompt = build_prompt(instance)
     prompt_ids, prompt_len = prompt_to_ids(prompt, tokenizer, device)
     checker = TokenChecker(instance["schema"])
-    frontier_picker = make_frontier_picker(method)
+    # ablation2: one Herding w vector for the whole diffusion run (cross-step momentum)
+    herding_state = HerdingMomentumState() if method == "ablation2" else None
+    frontier_picker = make_frontier_picker(method, herding_state=herding_state)
+
+    bidi_csr = bidi_live = bidi_start = None
+    if method == "bidi":
+        bidi_csr, bidi_start, bidi_live = build_json_dfa_from_tokenizer(tokenizer)
 
     mask_id = getattr(model.config, "mask_token_id", None) or 126336
     eos_id = 126081
@@ -139,6 +147,9 @@ def _run_diffusion_sdsd(
         mask_id=mask_id,
         eos_id=eos_id,
         eot_id=eot_id,
+        bidi_csr=bidi_csr,
+        bidi_live_states=bidi_live,
+        bidi_json_start_state=bidi_start if bidi_start is not None else 0,
     ):
         pass
     elapsed = time.perf_counter() - t0
@@ -402,7 +413,7 @@ def main():
         print("schema_guided requires llguidance. Install: pip install llguidance>=1.6")
         methods = [m for m in methods if m != "schema_guided"]
 
-    diffusion_methods = {"sdsd", "ablation1", "ablation2", "ablation3", "baseline", "argmax"}
+    diffusion_methods = {"sdsd", "ablation1", "ablation2", "ablation3", "baseline", "argmax", "bidi"}
     if diffusion_methods & set(methods) and not _SCHEMA_GUIDED_AVAILABLE:
         print("SDSD diffusion requires dgrammar/llguidance. Install: pip install llguidance>=1.6")
         methods = [m for m in methods if m not in diffusion_methods]
@@ -471,7 +482,7 @@ def main():
                 except Exception as e:
                     pbar.write(f"  {instance['instance_id']}: schema_guided failed: {e}")
                     r = {"decoded": "", "elapsed": 0, "success": False, "timing": {}}
-            elif method in ("sdsd", "ablation1", "ablation2", "ablation3", "baseline", "argmax"):
+            elif method in ("sdsd", "ablation1", "ablation2", "ablation3", "baseline", "argmax", "bidi"):
                 try:
                     r = _run_diffusion_sdsd(
                         instance, model, tokenizer, method, device,

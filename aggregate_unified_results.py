@@ -33,6 +33,7 @@ METHOD_NAMES = {
     "ablation2": "Ablation2 (Herding)",
     "ablation3": "Ablation3 (Spec-Tree)",
     "sdsd": "SDSD (Ours)",
+    "bidi": "BiDi (bidirectional gap)",
     "dgrammar": "Dgrammar",
     "dgrammar_v2": "Dgrammar v2",
     "dgrammar_v2_async": "Dgrammar v2+async+AC4",
@@ -130,6 +131,8 @@ def load_result_files(results_dir: Path, method_filter: list[str] | None = None)
                 method = "ablation3"
             elif "sdsd_sdsd" in name:
                 method = "sdsd"
+            elif "sdsd_bidi" in name:
+                method = "bidi"
             elif ("v2_async" in name or "ac4" in name) and "lave" not in name:
                 method = "dgrammar_v2_async"
             elif ("v2_timed" in name or "dgrammar" in name) and "lave" not in name:

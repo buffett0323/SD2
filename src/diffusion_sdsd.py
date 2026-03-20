@@ -9,7 +9,7 @@ in the diffusion paradigm.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -18,10 +18,16 @@ import torch.nn.functional as F
 from dgrammar.checker import TokenChecker
 from dgrammar.generate import add_gumbel_noise, get_num_transfer_tokens, extend_prefix
 
-from csr_dfa import build_csr_from_transition_dict
+from bidirectional_dingo import bidirectional_gap_dingo, dfa_run
+from csr_dfa import CSRTransitionMatrix, build_csr_from_transition_dict
 from sparse_dingo import sparse_dingo_dp
-from herding import herding_decode
+from herding import HerdingMomentumState, herding_single_constrained_step
 from baseline_dingo import baseline_dingo_dp
+
+# Cap gap length for bidirectional DP (|Q| × k × K per layer).
+MAX_BIDI_GAP = 48
+
+FrontierPicker = Callable[..., int]
 
 
 def _make_frontier_csr(valid_tokens: list[int], vocab_size: int):
@@ -30,6 +36,87 @@ def _make_frontier_csr(valid_tokens: list[int], vocab_size: int):
         return None
     transitions = {(0, t): 1 for t in valid_tokens}
     return build_csr_from_transition_dict(transitions, num_states=2, vocab_size=vocab_size)
+
+
+def _logits_to_prob_list(logits_1d: torch.Tensor, vocab_size: int) -> list[float]:
+    logits_1d = torch.nan_to_num(
+        logits_1d.float() if hasattr(logits_1d, "float") else logits_1d,
+        nan=-1e9,
+        posinf=1e9,
+        neginf=-1e9,
+    )
+    probs = F.softmax(logits_1d, dim=-1)
+    if probs.dim() > 1:
+        probs = probs[0]
+    prob_list = probs.tolist()
+    if len(prob_list) < vocab_size:
+        prob_list.extend([0.0] * (vocab_size - len(prob_list)))
+    return prob_list
+
+
+def _bidirectional_frontier_pick(
+    logits_1d: torch.Tensor,
+    checker: TokenChecker,
+    vocab_size: int,
+    ctx: dict[str, Any],
+) -> int:
+    """
+    Multi-mask gap Viterbi on JSON DFA + fixed right suffix; schema-check the
+    proposed chunk, then return first token (approximate CFG via DFA + verify).
+    """
+    x = ctx["x"]
+    focus_pos: int = ctx["focus_pos"]
+    logits_seq: torch.Tensor = ctx["logits_seq"]
+    gen_start: int = ctx["gen_start"]
+    mask_id: int = ctx["mask_id"]
+    csr: CSRTransitionMatrix = ctx["csr"]
+    json_start_state: int = ctx["json_start_state"]
+    live_states: set[int] = ctx["live_states"]
+
+    seq_len = x.shape[1]
+    if focus_pos >= seq_len or int(x[0, focus_pos].item()) != mask_id:
+        return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+
+    k = 0
+    p = focus_pos
+    while p < seq_len and int(x[0, p].item()) == mask_id:
+        k += 1
+        p += 1
+    k = min(k, MAX_BIDI_GAP)
+
+    suffix: list[int] = []
+    q = focus_pos + k
+    while q < seq_len:
+        tid = int(x[0, q].item())
+        if tid == mask_id:
+            break
+        suffix.append(tid)
+        q += 1
+
+    prefix_tokens = x[0, gen_start:focus_pos].tolist()
+    q_left = dfa_run(csr, json_start_state, prefix_tokens)
+    if q_left is None:
+        return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+
+    prob_vectors: list[list[float]] = []
+    for j in range(k):
+        pos = focus_pos + j
+        if pos >= seq_len:
+            break
+        prob_vectors.append(_logits_to_prob_list(logits_seq[pos], vocab_size))
+
+    if len(prob_vectors) != k:
+        return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+
+    res = bidirectional_gap_dingo(csr, q_left, prob_vectors, suffix, live_states)
+    if not res.success or not res.tokens:
+        return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+
+    first = res.tokens[0]
+    bias = checker.compute_mask(vocab_size=vocab_size)
+    if first < bias.shape[0] and bool(bias[first].item()):
+        return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
+    return first
 
 
 def _frontier_picker_base(
@@ -80,10 +167,66 @@ def _frontier_picker_base(
     return result.tokens[0]
 
 
-def make_frontier_picker(method: str):
-    """Create frontier_picker for sdsd, ablation1, ablation2, ablation3, baseline, argmax."""
+def _herding_persistent_frontier(
+    logits_1d: torch.Tensor,
+    checker: TokenChecker,
+    vocab_size: int,
+    state: HerdingMomentumState,
+) -> int:
+    """
+    Frontier pick with Herding momentum persisted across diffusion steps.
 
-    def _argmax(logits_1d, checker, vocab_size):
+    Same masking / softmax as other pickers; one herding update per call.
+    """
+    bias = checker.compute_mask(vocab_size=vocab_size)
+    if hasattr(logits_1d, "cpu"):
+        logits_1d = logits_1d.cpu().float()
+    bias = bias.to(logits_1d.device)
+    valid_tokens = [t for t in range(min(vocab_size, len(bias))) if not bool(bias[t].item())]
+    if not valid_tokens:
+        return -1
+    csr = _make_frontier_csr(valid_tokens, vocab_size)
+    if csr is None:
+        return -1
+
+    logits_1d = torch.nan_to_num(logits_1d, nan=-1e9, posinf=1e9, neginf=-1e9)
+    masked_logits = logits_1d.clone()
+    if bias.shape[0] > masked_logits.shape[0]:
+        bias = bias[: masked_logits.shape[0]]
+    elif bias.shape[0] < masked_logits.shape[0]:
+        pad = torch.ones(
+            masked_logits.shape[0] - bias.shape[0],
+            dtype=torch.bool,
+            device=masked_logits.device,
+        )
+        bias = torch.cat([bias, pad])
+    masked_logits[bias] = float("-inf")
+    if torch.isneginf(masked_logits).all():
+        return -1
+    probs = F.softmax(masked_logits, dim=-1)
+    if probs.dim() > 1:
+        probs = probs[0]
+    prob_list = probs.tolist()
+    if len(prob_list) < vocab_size:
+        prob_list.extend([0.0] * (vocab_size - len(prob_list)))
+
+    w = state.ensure_w(vocab_size)
+    best_t, ok = herding_single_constrained_step(
+        prob_list, csr, 0, w, state.prev_token, delta=0.0
+    )
+    if not ok or best_t is None:
+        return valid_tokens[0] if valid_tokens else -1
+    state.prev_token = best_t
+    return best_t
+
+
+def make_frontier_picker(method: str, herding_state: HerdingMomentumState | None = None):
+    """Create frontier_picker for sdsd, ablation1, ablation2, ablation3, baseline, argmax, bidi.
+
+    Pickers accept optional 4th argument ``ctx`` (dict) for bidirectional gap DP.
+    """
+
+    def _argmax(logits_1d, checker, vocab_size, ctx=None):
         """Dgrammar-style: mask invalid, argmax. Use for debugging (verify loop works)."""
         bias = checker.compute_mask(vocab_size=vocab_size)
         if hasattr(logits_1d, "device"):
@@ -100,13 +243,10 @@ def make_frontier_picker(method: str):
         logits[bias] = float("-inf")
         return int(logits.argmax().item())
 
-    def _sparse_dingo(logits_1d, checker, vocab_size):
+    def _sparse_dingo(logits_1d, checker, vocab_size, ctx=None):
         return _frontier_picker_base(logits_1d, checker, vocab_size, sparse_dingo_dp)
 
-    def _herding(logits_1d, checker, vocab_size):
-        return _frontier_picker_base(logits_1d, checker, vocab_size, herding_decode)
-
-    def _baseline(logits_1d, checker, vocab_size):
+    def _baseline(logits_1d, checker, vocab_size, ctx=None):
         bias = checker.compute_mask(vocab_size=vocab_size)
         if hasattr(logits_1d, "cpu"):
             logits_1d = logits_1d.cpu().float()
@@ -150,9 +290,23 @@ def make_frontier_picker(method: str):
     if method == "ablation1":
         return _sparse_dingo
     if method == "ablation2":
-        return _herding
+        hs = herding_state if herding_state is not None else HerdingMomentumState()
+
+        def _herding_persistent(logits_1d, checker, vocab_size, ctx=None):
+            return _herding_persistent_frontier(logits_1d, checker, vocab_size, hs)
+
+        return _herding_persistent
     if method == "baseline":
         return _baseline
+    if method == "bidi":
+        def _bidi(logits_1d, checker, vocab_size, ctx=None):
+            if ctx is None:
+                return _sparse_dingo(logits_1d, checker, vocab_size, None)
+            return _bidirectional_frontier_pick(
+                logits_1d, checker, vocab_size, ctx
+            )
+
+        return _bidi
     return _sparse_dingo
 
 
@@ -162,7 +316,7 @@ def generate_diffusion_sdsd(
     tokenizer,
     checker: TokenChecker,
     prompt_len: int,
-    frontier_picker: Callable[[torch.Tensor, TokenChecker, int], int],
+    frontier_picker: FrontierPicker,
     steps: int = 128,
     gen_length: int = 256,
     block_length: int = 32,
@@ -173,12 +327,16 @@ def generate_diffusion_sdsd(
     eot_id: int = 126348,
     max_batch_size: int = 8,
     max_resamples: int = 100,
+    bidi_csr: CSRTransitionMatrix | None = None,
+    bidi_live_states: set[int] | None = None,
+    bidi_json_start_state: int = 0,
 ):
     """
     Diffusion generation with SDSD constraint at frontier.
 
-    frontier_picker(logits_1d, checker, vocab_size) -> token_id
-    Uses our DINGO/Herding to pick among grammar-valid tokens.
+    frontier_picker(logits_1d, checker, vocab_size, ctx=None) -> token_id
+    When ``bidi_csr`` is set, ``ctx`` is passed with x, focus_pos, logits_seq for
+    bidirectional gap Viterbi (see ``make_frontier_picker("bidi")``).
     """
     start_time = time.monotonic()
     x = torch.full((1, prompt.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
@@ -243,8 +401,23 @@ def generate_diffusion_sdsd(
 
                 # SDSD frontier: use our picker instead of argmax
                 if consume_idx < x.shape[1] and mask_index[0, consume_idx]:
+                    bidi_ctx = None
+                    if bidi_csr is not None and bidi_live_states is not None:
+                        bidi_ctx = {
+                            "x": x,
+                            "focus_pos": consume_idx,
+                            "logits_seq": logits_with_noise[0],
+                            "gen_start": gen_start,
+                            "mask_id": mask_id,
+                            "csr": bidi_csr,
+                            "json_start_state": bidi_json_start_state,
+                            "live_states": bidi_live_states,
+                        }
                     tok = frontier_picker(
-                        logits_with_noise[0, consume_idx], checker, vocab_size
+                        logits_with_noise[0, consume_idx],
+                        checker,
+                        vocab_size,
+                        bidi_ctx,
                     )
                     if tok < 0:
                         bias = checker.compute_mask(vocab_size=vocab_size)
@@ -316,8 +489,23 @@ def generate_diffusion_sdsd(
                     # SDSD violator retry: use our picker instead of argmax
                     found = False
                     while len(resamples) < max_resamples:
+                        bidi_ctx = None
+                        if bidi_csr is not None and bidi_live_states is not None:
+                            bidi_ctx = {
+                                "x": x,
+                                "focus_pos": violator,
+                                "logits_seq": logits_with_noise[0],
+                                "gen_start": gen_start,
+                                "mask_id": mask_id,
+                                "csr": bidi_csr,
+                                "json_start_state": bidi_json_start_state,
+                                "live_states": bidi_live_states,
+                            }
                         next_vocab = frontier_picker(
-                            logits_with_noise[0, violator], checker, vocab_size
+                            logits_with_noise[0, violator],
+                            checker,
+                            vocab_size,
+                            bidi_ctx,
                         )
                         if next_vocab < 0 or logits_with_noise[0, violator, next_vocab] == -np.inf:
                             break

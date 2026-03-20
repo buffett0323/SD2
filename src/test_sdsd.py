@@ -23,6 +23,38 @@ from sparse_dingo import (
 from baseline_dingo import baseline_dingo_dp
 from herding import herding_decode, HerdingResult
 from speculative_tree import speculative_decode, SpeculativeResult
+from bidirectional_dingo import bidirectional_gap_dingo, states_compatible_with_suffix
+
+
+def test_bidirectional_gap_dingo():
+    """Bidirectional gap DP: left anchor + k masks + fixed suffix (meet on live states)."""
+    print("=" * 60)
+    print("Test: Bidirectional gap DINGO")
+    print("=" * 60)
+    # 0 --0--> 1 --1--> 2 (accepting)
+    transitions = {(0, 0): 1, (1, 1): 2}
+    csr = build_csr_from_transition_dict(transitions, num_states=3, vocab_size=10)
+    live = {2}
+    # Empty suffix: same as forward DINGO for two steps
+    p0 = [0.0] * 10
+    p0[0] = 0.9
+    p0[1] = 0.1
+    p1 = [0.0] * 10
+    p1[1] = 0.8
+    p1[0] = 0.2
+    r = bidirectional_gap_dingo(csr, 0, [p0, p1], [], live)
+    assert r.success and r.tokens == [0, 1], r
+    print(f"  k=2, no suffix: tokens={r.tokens}")
+
+    # One mask + suffix token 1: must end gap at state 1 before suffix
+    p_only = [[0.0] * 10]
+    p_only[0][0] = 1.0
+    good = states_compatible_with_suffix(csr, [1], live)
+    assert 1 in good
+    r2 = bidirectional_gap_dingo(csr, 0, p_only, [1], live)
+    assert r2.success and r2.tokens == [0]
+    print(f"  k=1, suffix=[1]: tokens={r2.tokens}")
+    print("  ✓ Bidirectional gap DINGO OK\n")
 
 
 def test_csr_conversion():
@@ -336,6 +368,7 @@ def run_all_tests():
     test_b1_b2_equivalence()
     test_herding_momentum()
     test_speculative_tree()
+    test_bidirectional_gap_dingo()
     
     print("=" * 60)
     print("All tests passed! ✓")
