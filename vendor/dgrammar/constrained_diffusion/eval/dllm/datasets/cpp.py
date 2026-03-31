@@ -2,15 +2,19 @@
 Collects all datasets to be evaluated
 """
 
-from typing import Iterator
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Iterator
 
 from constrained_diffusion.eval.dllm.datasets.generic import (
     Instance,
     DataSet,
     extract_code,
 )
-from rustformlang.cfg import CFG
-from rustformlang.fa.dfa import DFA
+
+if TYPE_CHECKING:
+    from rustformlang.cfg import CFG
+    from rustformlang.fa.dfa import DFA
 
 
 def format_prompt_to_question(prompt: str):

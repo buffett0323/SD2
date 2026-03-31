@@ -226,6 +226,7 @@ def main():
         result = {
             "instance_id": instance.instance_id(),
             "method": "ggbs",
+            "dataset": dataset_name,
             "valid": valid,
             "extracted": extracted,
             "time_taken": elapsed,
@@ -240,6 +241,9 @@ def main():
                 "per_token_total_ms": elapsed * 1000 / tokens,
             },
         }
+        data = getattr(instance, "data", None)
+        if isinstance(data, dict) and data.get("schema") is not None:
+            result["schema"] = data["schema"]
 
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a") as f:

@@ -5,6 +5,7 @@ Collects all datasets to be evaluated
 from constrained_diffusion.eval.dllm.datasets.cpp import CppDataSet
 from constrained_diffusion.eval.dllm.datasets.generic import DataSet
 from constrained_diffusion.eval.dllm.datasets.jsonschema import JsonSchemaDataSet
+from constrained_diffusion.eval.dllm.datasets.jsonschemabench_hf import JSONSchemaBenchDataSet
 from constrained_diffusion.eval.dllm.datasets.smiles import SmilesDataSet
 
 ALL_DATASETS: dict[str, DataSet] = {}
@@ -33,3 +34,5 @@ register_dataset("THUDM/humaneval-x/cpp", CppDataSet(split="test", subset="cpp")
 register_dataset("zai-org/humaneval-x/cpp", load_dataset("THUDM/humaneval-x/cpp"))
 register_dataset("smiles", SmilesDataSet())
 register_dataset("jsonschema", JsonSchemaDataSet())
+# JSONSchemaBench (arXiv:2501.10868): epfl-dlab/JSONSchemaBench — not json-mode-eval
+register_dataset("jsonschemabench", JSONSchemaBenchDataSet("default"))

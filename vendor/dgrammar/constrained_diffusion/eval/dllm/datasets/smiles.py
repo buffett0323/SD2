@@ -1,12 +1,14 @@
-from typing import Iterator
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Iterator
 
 from datasets import load_dataset
 
 from constrained_diffusion.eval.dllm.datasets.generic import DataSet, Instance
-from rustformlang.cfg import CFG
-from rustformlang.fa.dfa import DFA
 
-from constrained_diffusion.cfgs.smiles import smiles_schema
+if TYPE_CHECKING:
+    from rustformlang.cfg import CFG
+    from rustformlang.fa.dfa import DFA
 
 
 class SmilesInstance(Instance):
@@ -71,6 +73,7 @@ class SmilesInstance(Instance):
         Returns the grammar, lex map and subtokens for the dataset.
         This is used to compile the dataset's language.
         """
+        from constrained_diffusion.cfgs.smiles import smiles_schema
         return smiles_schema()
 
     def strip_chars(self):

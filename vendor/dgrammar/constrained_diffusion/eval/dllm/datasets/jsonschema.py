@@ -1,10 +1,13 @@
-from typing import Iterator
+from __future__ import annotations
+
+import json
+from typing import TYPE_CHECKING, Iterator
 
 from constrained_diffusion.eval.dllm.datasets.generic import DataSet, Instance
-from constrained_diffusion.cfgs.jsonschema import schema_to_cfg
-from rustformlang.cfg import CFG
-from rustformlang.fa.dfa import DFA
-import json
+
+if TYPE_CHECKING:
+    from rustformlang.cfg import CFG
+    from rustformlang.fa.dfa import DFA
 from datasets import load_dataset
 
 
@@ -71,6 +74,7 @@ class JsonSchemaInstance(Instance):
         Returns the grammar, lex map and subtokens for the dataset.
         This is used to compile the dataset's language.
         """
+        from constrained_diffusion.cfgs.jsonschema import schema_to_cfg
         return schema_to_cfg(json.loads(self.data["schema"]))
 
     def cfg(self) -> str:

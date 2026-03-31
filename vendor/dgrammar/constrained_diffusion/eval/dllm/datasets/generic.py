@@ -1,7 +1,10 @@
-from typing import Iterator
+from __future__ import annotations
 
-from rustformlang.cfg import CFG
-from rustformlang.fa.dfa import DFA
+from typing import TYPE_CHECKING, Iterator
+
+if TYPE_CHECKING:
+    from rustformlang.cfg import CFG
+    from rustformlang.fa.dfa import DFA
 
 
 def extract_code(output: str, humanreadable_target_language: str, nth: int):

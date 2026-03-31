@@ -2,6 +2,11 @@
 
 LAVE uses llguidance Checker with beam search validation and AR fallback.
 We monkey-patch the Checker to record per-operation timing.
+
+Dataset registry name (argv[3]): e.g. ``jsonschema`` (json-mode-eval) or
+``jsonschemabench`` (``epfl-dlab/JSONSchemaBench``). For JSONSchemaBench README
+metrics (syntactic/functional/time/constraint %), each JSONL line includes
+``schema`` so you can run ``bench/jsonschemabench_metrics.py`` on the output.
 """
 
 import json
@@ -215,6 +220,7 @@ def main():
         result = {
             "instance_id": instance.instance_id(),
             "method": "lave",
+            "dataset": dataset_name,
             "valid": valid,
             "extracted": extracted,
             "time_taken": elapsed,
@@ -229,6 +235,9 @@ def main():
                 "per_token_total_ms": elapsed * 1000 / tokens,
             },
         }
+        data = getattr(instance, "data", None)
+        if isinstance(data, dict) and data.get("schema") is not None:
+            result["schema"] = data["schema"]
 
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a") as f:

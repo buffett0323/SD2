@@ -75,17 +75,39 @@ def load_instance_lookup():
 
 
 def eval_results(check_fn, results: list[dict], instance_lookup: dict = None) -> list[dict]:
-    """Run ETH checker on each result. Add syntax_ok, passed_tests."""
-    if not check_fn:
-        for r in results:
-            r["syntax_ok"] = False
-            r["passed_tests"] = False
-        return results
+    """Run ETH checker or JSONSchemaBench schema validation. Add syntax_ok, passed_tests."""
+    validate_instance_against_schema = None
+    bench_path = Path(__file__).resolve().parent / "vendor" / "dgrammar" / "bench"
+    if bench_path.exists():
+        sys.path.insert(0, str(bench_path))
+        try:
+            from jsonschemabench_metrics import validate_instance_against_schema
+        except ImportError:
+            pass
 
     instance_lookup = instance_lookup or {}
     for r in results:
         try:
-            # Merge instance data (schema, input, output) for checker
+            # JSONSchemaBench JSONL rows carry ``schema``; validate extracted JSON in-process
+            if (
+                validate_instance_against_schema
+                and r.get("schema")
+                and (
+                    r.get("dataset") == "jsonschemabench"
+                    or "jsonschemabench" in str(r.get("_source_file", ""))
+                )
+            ):
+                ok = validate_instance_against_schema(r.get("extracted"), r["schema"])
+                r["syntax_ok"] = ok
+                r["passed_tests"] = ok
+                continue
+
+            if not check_fn:
+                r["syntax_ok"] = False
+                r["passed_tests"] = False
+                continue
+
+            # Merge instance data (schema, input, output) for ETH checker (json-mode-eval)
             iid = r.get("instance_id", "")
             merged = {**instance_lookup.get(iid, {}), **r}
             ev = check_fn(merged, timeout=40)
@@ -108,6 +130,7 @@ def load_result_files(results_dir: Path, method_filter: list[str] | None = None)
         "*_jsonschema_*.jsonl",
         "*_jsonschema.jsonl",
         "sdsd_*_jsonschema.jsonl",
+        "*jsonschemabench*.jsonl",
     ]
 
     for pattern in patterns:
@@ -310,7 +333,10 @@ def main():
 
     check_fn = load_checker()
     if not check_fn:
-        print("ETH checker not found. Syntactic/Functional will be 0. Install vendor/CD4dLLM or vendor/dgrammar.")
+        print(
+            "ETH checker not found: json-mode-eval rows will not get syntax/functional from ETH. "
+            "JSONSchemaBench JSONL rows with inline `schema` still use jsonschema validation."
+        )
     instance_lookup = load_instance_lookup()
     if instance_lookup:
         print(f"Instance lookup: {len(instance_lookup)} instances for checker")
