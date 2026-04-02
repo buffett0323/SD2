@@ -1,5 +1,16 @@
 """Run IG-CD (ETH baseline) with per-operation timing instrumentation.
 
+Same driver shape and JSONL conventions as ``run_lave_timed.py`` (``seed``, ``limit``,
+``dataset``, ``steps``, ``offset`` / ``-off`` suffix), but constrained generation uses
+CFG∩DFA (rustformlang) instead of llguidance / LAVE.
+
+Dataset registry name (argv[3]): e.g. ``jsonschema`` or ``jsonschemabench``. Lines include
+``dataset`` and ``schema`` (when the instance exposes it) for ``jsonschemabench_metrics.py``
+and unified aggregation.
+
+``valid`` matches ``run_lave_timed`` (no mask tokens before first EOS/EOT in the
+generated span). ``grammar_complete`` is the IG-CD generator flag (EOS + no holes).
+
 Records:
   - model_forward_ms: time per model(x).logits call
   - grammar_check_ms: time per CFG ∩ DFA emptiness check
@@ -13,7 +24,6 @@ import time
 import sys
 import signal
 from pathlib import Path
-from collections import defaultdict
 
 import torch
 
@@ -77,6 +87,21 @@ class TimingStats:
 
 
 STATS = TimingStats()
+
+# LLaDA-8B-Instruct special token ids (same as ``run_lave_timed.py``)
+_EOS_ID, _EOT_ID, _MASK_ID = 126081, 126348, 126336
+_GEN_LEN = 256
+
+
+def diffusion_sequence_valid(out: torch.Tensor | None, prompt_ids: torch.Tensor) -> bool:
+    """True iff first EOS/EOT lies in the gen span and no mask appears before it."""
+    if out is None:
+        return False
+    gen_ids = out[0, prompt_ids.shape[1] :].tolist()
+    if _EOS_ID not in gen_ids and _EOT_ID not in gen_ids:
+        return False
+    eos_pos = next((j for j, t in enumerate(gen_ids) if t in (_EOS_ID, _EOT_ID)), None)
+    return eos_pos is not None and _MASK_ID not in gen_ids[:eos_pos]
 
 
 def _patch_model_forward(model):
@@ -299,26 +324,30 @@ def main():
     orig_lex_map = None
 
     for i, instance in enumerate(instances):
-        if lang is None or dataset.different_grammar_per_instance:
-            lang, lex_map, subtokens = instance.language_lex_subtokens()
-            orig_lex_map = lex_map.copy()
-            lang = lang.concatenate(CFG.from_text("S -> lexFence | $", "S"))
-            if instance.strip_chars() is not None and "\n" not in instance.strip_chars():
-                lex_map["lexFence"] = r"\n?```"
-            else:
-                lex_map["lexFence"] = "```"
-            orig_lex_map["lexFence"] = lex_map["lexFence"]
-            lang = lang.to_normal_form()
-            lex_map = compile_lex_map(lex_map, subtokens=subtokens)
-            additional_stuff = None
-            prelex = instance.prelex()
+        try:
+            if lang is None or dataset.different_grammar_per_instance:
+                lang, lex_map, subtokens = instance.language_lex_subtokens()
+                orig_lex_map = lex_map.copy()
+                lang = lang.concatenate(CFG.from_text("S -> lexFence | $", "S"))
+                if instance.strip_chars() is not None and "\n" not in instance.strip_chars():
+                    lex_map["lexFence"] = r"\n?```"
+                else:
+                    lex_map["lexFence"] = "```"
+                orig_lex_map["lexFence"] = lex_map["lexFence"]
+                lang = lang.to_normal_form()
+                lex_map = compile_lex_map(lex_map, subtokens=subtokens)
+                additional_stuff = None
+                prelex = instance.prelex()
 
-        if additional_stuff is None:
-            additional_stuff = preprocessed_generate_stuff(
-                tokenizer, lang, lex_map,
-                prelex=prelex, subtokens=subtokens,
-                strip_chars=instance.strip_chars(),
-            )
+            if additional_stuff is None:
+                additional_stuff = preprocessed_generate_stuff(
+                    tokenizer, lang, lex_map,
+                    prelex=prelex, subtokens=subtokens,
+                    strip_chars=instance.strip_chars(),
+                )
+        except Exception as e:
+            print(f"  Skipping {instance.instance_id()}: {e}")
+            continue
 
         prompt_ids, prompt_len, suffix_str, start_line, prompt_raw = (
             eval_model.prepare_prompt(instance, tokenizer, model, trace=False)
@@ -330,6 +359,7 @@ def main():
 
         out = None
         resamples = []
+<<<<<<< HEAD
         valid = False
         signal.signal(signal.SIGALRM, _timeout_handler)
         signal.alarm(instance_timeout)
@@ -339,6 +369,15 @@ def main():
                 constraint_lang=lang, lex_map=lex_map,
                 prompt_len=prompt_len,
                 steps=steps, gen_length=256, block_length=32,
+=======
+        grammar_complete = False
+        try:
+            for out, resamples, grammar_complete in generate_timed(
+                model, prompt_ids, tokenizer,
+                constraint_lang=lang, lex_map=lex_map,
+                prompt_len=prompt_len,
+                steps=steps, gen_length=_GEN_LEN, block_length=32,
+>>>>>>> c21003171d7d41c33f7d34fcdeafb588b327ff1f
                 temperature=0.2, remasking="low_confidence",
                 prelex=prelex, subtokens=subtokens,
                 strip_chars=instance.strip_chars(),
@@ -346,6 +385,7 @@ def main():
                 constrain=True, max_resamples=100,
             ):
                 pass
+<<<<<<< HEAD
         except InstanceTimeout:
             signal.alarm(0)
             elapsed = time.monotonic() - start_time
@@ -369,23 +409,30 @@ def main():
             print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: ERROR {e}")
             continue
         signal.alarm(0)
+=======
+        except Exception as e:
+            print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: ERROR {e}")
+            continue
+>>>>>>> c21003171d7d41c33f7d34fcdeafb588b327ff1f
 
         elapsed = time.monotonic() - start_time
 
         if out is None:
             code = "TIMEOUT"
+            extracted = None
+            valid = False
         else:
             code = tokenizer.batch_decode(
                 out[:, prompt_ids.shape[1]:], skip_special_tokens=True
             )[0]
-
-        extracted = instance.extract_result(suffix_str + start_line + code)
+            extracted = instance.extract_result(suffix_str + start_line + code)
+            valid = diffusion_sequence_valid(out, prompt_ids)
 
         # Autocompletion
         autocompletion = None
         ac_time = 0.0
         supertokens_map = derive_supertokens(subtokens) if subtokens else {}
-        if out is not None and not valid:
+        if out is not None and not grammar_complete:
             ac_start = time.perf_counter()
             mask_id = 126336
             mask_decoded = tokenizer.decode(mask_id)
@@ -426,7 +473,9 @@ def main():
         result = {
             "instance_id": instance.instance_id(),
             "method": "igcd",
+            "dataset": dataset_name,
             "valid": valid,
+            "grammar_complete": grammar_complete,
             "extracted": extracted,
             "autocompletion": autocompletion,
             "time_taken": elapsed,
@@ -438,12 +487,13 @@ def main():
                 "total_forward_ms": total_forward_ms,
                 "constraint_pct": (total_constraint_ms / (total_constraint_ms + total_forward_ms) * 100)
                     if (total_constraint_ms + total_forward_ms) > 0 else 0,
-                "per_token_constraint_ms": (total_constraint_ms / timing["tokens_unmasked"])
-                    if timing["tokens_unmasked"] > 0 else 0,
-                "per_token_total_ms": (elapsed * 1000 / timing["tokens_unmasked"])
-                    if timing["tokens_unmasked"] > 0 else 0,
+                "per_token_constraint_ms": total_constraint_ms / _GEN_LEN,
+                "per_token_total_ms": elapsed * 1000 / _GEN_LEN,
             },
         }
+        data = getattr(instance, "data", None)
+        if isinstance(data, dict) and data.get("schema") is not None:
+            result["schema"] = data["schema"]
 
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a") as f:
@@ -454,7 +504,7 @@ def main():
         pct = result["timing"]["constraint_pct"]
         print(
             f"  [{i+1}/{len(instances)}] {instance.instance_id()}: "
-            f"valid={valid}, time={elapsed:.1f}s, "
+            f"valid={valid}, igcd_complete={grammar_complete}, time={elapsed:.1f}s, "
             f"fwd={fwd_mean:.0f}ms, gc={gc_mean:.1f}ms, "
             f"constraint={pct:.0f}%, resamples={len(resamples)}"
         )

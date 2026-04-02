@@ -52,9 +52,52 @@ def eval_jsonschema(input_file: str, output_file: str):
     return {"n": n, "syntax_ok": syntax_ok, "passed": passed, "avg_time": avg_time}
 
 
+def eval_jsonschemabench(input_file: str, output_file: str):
+    """
+    Evaluate JSONL from ``run_lave_timed`` / ``run_lave_ggbs`` on JSONSchemaBench
+    (rows must include ``schema``). Sets ``syntax_ok`` / ``passed_tests`` via
+    :mod:`jsonschema` instance validation (same notion as ``jsonschemabench_metrics``).
+    """
+    from jsonschemabench_metrics import validate_instance_against_schema
+
+    results = []
+    with open(input_file) as f:
+        lines = f.readlines()
+
+    with open(output_file, "w") as out:
+        for line in lines:
+            d = json.loads(line)
+            sch = d.get("schema")
+            ext = d.get("extracted")
+            ok = bool(sch) and validate_instance_against_schema(ext, sch)
+            d["syntax_ok"] = ok
+            d["passed_tests"] = ok
+            results.append(d)
+            out.write(json.dumps(d) + "\n")
+
+    n = len(results)
+    if n == 0:
+        print(f"  No results in {input_file}")
+        return None
+
+    syntax_ok = sum(1 for r in results if r.get("syntax_ok", False))
+    passed = sum(1 for r in results if r.get("passed_tests", False))
+    times = [r.get("time_taken", 0) or 0 for r in results]
+    avg_time = sum(times) / n
+
+    print(f"  {n} instances, syntax={syntax_ok}/{n} ({syntax_ok/n*100:.1f}%), "
+          f"functional={passed}/{n} ({passed/n*100:.1f}%), avg_time={avg_time:.1f}s")
+    return {"n": n, "syntax_ok": syntax_ok, "passed": passed, "avg_time": avg_time}
+
+
 def find_result_files(tag_filter=None):
     """Find result JSONL files, optionally filtered by tag."""
-    files = sorted(RESULTS_DIR.glob("*_jsonschema_*.jsonl"))
+    files = sorted(
+        set(
+            list(RESULTS_DIR.glob("*_jsonschema_*.jsonl"))
+            + list(RESULTS_DIR.glob("*_jsonschemabench_*.jsonl"))
+        )
+    )
     # Exclude compiled/eval output files
     files = [f for f in files if ".compiled." not in f.name]
     if tag_filter:
@@ -114,7 +157,10 @@ def main():
                 out.write(line)
 
         output_file = str(RESULTS_DIR / f"{base_name}.compiled.jsonl")
-        eval_jsonschema(str(merged_file), output_file)
+        if "jsonschemabench" in base_name:
+            eval_jsonschemabench(str(merged_file), output_file)
+        else:
+            eval_jsonschema(str(merged_file), output_file)
 
         # Clean up merged file
         merged_file.unlink()

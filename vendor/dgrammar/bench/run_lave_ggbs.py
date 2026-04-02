@@ -1,33 +1,33 @@
-"""Run LAVE (CD4dLLM 'our' method) with per-operation timing on jsonschema.
+#!/usr/bin/env python3
+"""LAVE ``generate_our`` with GGBS-style ``validate`` (no random beam sampling).
 
-LAVE uses llguidance Checker with beam search validation and AR fallback.
-We monkey-patch the Checker to record per-operation timing.
+Same driver as ``run_lave_timed.py`` (CD4dLLM dataset, model, JSONL timing), but passes
+``use_ggbs_validate=True`` into ``generate``: beam expansion uses grammar-masked candidates
+after replaying each beam prefix, and the remainder is ranked deterministically instead of
+``random.sample``.
 
-Dataset registry name (argv[3]): e.g. ``jsonschema`` (json-mode-eval) or
-``jsonschemabench`` (``epfl-dlab/JSONSchemaBench``). For JSONSchemaBench README
-metrics (syntactic/functional/time/constraint %), each JSONL line includes
-``schema`` so you can run ``bench/jsonschemabench_metrics.py`` on the output.
+Prerequisite: run from ``vendor/dgrammar`` with ``constrained_diffusion`` on PYTHONPATH
+(see LAVE README). Does **not** use ``anlp_final`` diffusion_sdsd.
+
+Usage::
+
+    python bench/run_lave_ggbs.py <seed> <limit> <dataset> <steps> <offset>
+
+Example::
+
+    cd vendor/dgrammar
+    python bench/run_lave_ggbs.py 0 20 jsonschema 128 0
 """
 
 import json
 import time
 import sys
-import signal
 from pathlib import Path
 
 import torch
 
-
-class InstanceTimeout(Exception):
-    pass
-
-
-def _timeout_handler(signum, frame):
-    raise InstanceTimeout("Instance timeout")
-
 from constrained_diffusion.eval.dllm.dataset import load_dataset
 from constrained_diffusion.eval.dllm.model import load_model
-import jsb_dataset  # noqa: F401 - registers jsb_* datasets
 
 
 class LAVETimingStats:
@@ -131,17 +131,14 @@ def main():
     dataset_name = sys.argv[3] if len(sys.argv) > 3 else "jsonschema"
     steps = int(sys.argv[4]) if len(sys.argv) > 4 else 128
     offset = int(sys.argv[5]) if len(sys.argv) > 5 else 0
-    instance_timeout = int(sys.argv[6]) if len(sys.argv) > 6 else 120
 
-    tag = "lave_timed"
+    tag = "ggbs_lave_timed"
     ds_safe = dataset_name.replace("/", "_")
     sfx = f"_off{offset}" if offset > 0 else ""
     output_file = f"results/{tag}_{ds_safe}_s{seed}_t{steps}{sfx}.jsonl"
 
-    # Patch Checker before any imports that use it
     patch_checker_class()
 
-    # Import LAVE's generate function
     from constrained_diffusion.eval.dllm.models.llada.generate_our import generate as lave_generate
 
     dataset = load_dataset(dataset_name)
@@ -154,10 +151,9 @@ def main():
 
     all_instances = sorted(dataset, key=lambda x: x.instance_id())
     instances = all_instances[offset:offset + limit]
-    print(f"LAVE timed: {len(instances)} instances, seed={seed}, T={steps}")
+    print(f"GGBS validate (LAVE generate): {len(instances)} instances, seed={seed}, T={steps}")
 
     for i, instance in enumerate(instances):
-        # Get the per-instance lark grammar (LAVE uses lark, not JSON schema)
         try:
             cfg_lang = instance.cfg()
         except Exception as e:
@@ -172,8 +168,6 @@ def main():
         torch.manual_seed(seed)
         start_time = time.monotonic()
 
-        signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(instance_timeout)
         try:
             out, total_retry_num, gen_start_time = lave_generate(
                 model,
@@ -192,42 +186,11 @@ def main():
                 top_n_beam=30,
                 random_n_beam=20,
                 max_retry_num_total=1000,
+                use_ggbs_validate=True,
             )
-        except InstanceTimeout:
-            signal.alarm(0)
-            elapsed = time.monotonic() - start_time
-            print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: TIMEOUT ({elapsed:.1f}s)")
-            result = {
-                "instance_id": instance.instance_id(),
-                "method": "lave",
-                "valid": False,
-                "extracted": None,
-                "time_taken": elapsed,
-                "resamples": 0,
-                "timing": {"timeout": True},
-            }
-            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_file, "a") as f:
-                print(json.dumps(result), flush=True, file=f)
-            continue
         except Exception as e:
-            signal.alarm(0)
-            elapsed = time.monotonic() - start_time
             print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: ERROR {e}")
-            result = {
-                "instance_id": instance.instance_id(),
-                "method": "lave",
-                "valid": False,
-                "extracted": None,
-                "time_taken": elapsed,
-                "resamples": 0,
-                "timing": {"error": True, "message": str(e)},
-            }
-            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_file, "a") as f:
-                print(json.dumps(result), flush=True, file=f)
             continue
-        signal.alarm(0)
 
         elapsed = time.monotonic() - start_time
         STATS.retry_count = total_retry_num
@@ -242,7 +205,6 @@ def main():
             )[0]
             extracted = instance.extract_result(suffix + start_line + code)
 
-            # Check validity: no mask tokens before EOS
             gen_ids = out[0, prompt_ids.shape[1]:].tolist()
             eos_id, eot_id, mask_id = 126081, 126348, 126336
             valid = False
@@ -252,7 +214,6 @@ def main():
 
         timing = STATS.summary()
 
-        # Constraint = everything except forward passes
         total_constraint_ms = (
             timing["validate_total_ms"]
             + timing["consume_total_ms"]
@@ -264,7 +225,7 @@ def main():
 
         result = {
             "instance_id": instance.instance_id(),
-            "method": "lave",
+            "method": "ggbs",
             "dataset": dataset_name,
             "valid": valid,
             "extracted": extracted,
