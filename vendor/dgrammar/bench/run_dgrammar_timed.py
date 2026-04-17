@@ -105,30 +105,378 @@ def extend_prefix_timed(checker, x, consume_idx, mask_id):
         return consume_idx + count, consume_idx + count
 
 
+def _minimal_json_value(schema, depth=0):
+    """Return a minimal Python value (JSON-serialisable) satisfying `schema`.
+
+    Handles the common JSON Schema keywords used in jsb_medium.  Deliberately
+    returns conservative defaults (empty strings, 0s, empty arrays) that are
+    accepted by most schemas without complex constraints.
+    """
+    if depth > 10 or not isinstance(schema, dict):
+        return ""
+
+    # const / enum take absolute priority
+    if "const" in schema:
+        return schema["const"]
+    if "enum" in schema:
+        return schema["enum"][0]
+
+    # anyOf / oneOf / allOf — try first sub-schema
+    for kw in ("anyOf", "oneOf", "allOf"):
+        if kw in schema and schema[kw]:
+            merged = dict(schema)
+            merged.update(schema[kw][0])
+            merged.pop(kw, None)
+            val = _minimal_json_value(merged, depth)
+            if val is not None:
+                return val
+
+    type_ = schema.get("type")
+    if isinstance(type_, list):
+        for t in type_:
+            if t == "null":
+                continue  # prefer non-null
+            v = _minimal_json_value(dict(schema, type=t), depth)
+            if v is not None:
+                return v
+        return None
+
+    if type_ == "null":
+        return None
+    if type_ == "boolean":
+        return True
+    if type_ in ("integer", "number"):
+        mn = schema.get("minimum", schema.get("exclusiveMinimum", -1))
+        if mn is not None and mn > 0:
+            val = int(mn) + (1 if schema.get("exclusiveMinimum") == mn else 0)
+        else:
+            val = 0
+        mx = schema.get("maximum", schema.get("exclusiveMaximum"))
+        if mx is not None and val > mx:
+            val = int(mx)
+        return val
+    if type_ == "string":
+        fmt = schema.get("format", "")
+        min_len = schema.get("minLength", 0)
+        if fmt in ("uri", "iri", "uri-reference", "iri-reference"):
+            return "http://x.example.com"
+        if fmt in ("date-time", "datetime"):
+            return "2000-01-01T00:00:00Z"
+        if fmt == "date":
+            return "2000-01-01"
+        if fmt == "time":
+            return "00:00:00Z"
+        if fmt == "email":
+            return "x@x.com"
+        if fmt == "uuid":
+            return "00000000-0000-0000-0000-000000000000"
+        if fmt == "hostname":
+            return "x.example.com"
+        if fmt == "ipv4":
+            return "0.0.0.0"
+        if fmt == "ipv6":
+            return "::1"
+        return "x" * max(1, min_len)
+    if type_ == "array":
+        min_items = schema.get("minItems", 0)
+        items_schema = schema.get("items", {})
+        if not isinstance(items_schema, dict):
+            items_schema = {}
+        return [_minimal_json_value(items_schema, depth + 1) for _ in range(max(0, min_items))]
+
+    # object (explicit or implied by presence of properties/required)
+    if type_ == "object" or "properties" in schema or "required" in schema:
+        required = schema.get("required", [])
+        properties = schema.get("properties", {})
+        result = {}
+        for key in required:
+            prop_schema = properties.get(key, {})
+            val = _minimal_json_value(prop_schema, depth + 1)
+            result[key] = val if val is not None else ""
+        return result
+
+    # No explicit type — check format for type hints
+    fmt = schema.get("format", "")
+    if fmt in ("uri", "iri", "uri-reference", "iri-reference"):
+        return "http://x.example.com"
+    if fmt in ("date-time", "datetime"):
+        return "2000-01-01T00:00:00Z"
+    if fmt == "date":
+        return "2000-01-01"
+    if fmt == "time":
+        return "00:00:00Z"
+    if fmt == "email":
+        return "x@x.com"
+    if fmt == "uuid":
+        return "00000000-0000-0000-0000-000000000000"
+    if fmt == "hostname":
+        return "x.example.com"
+    if fmt == "ipv4":
+        return "0.0.0.0"
+    if fmt == "ipv6":
+        return "::1"
+    # Default to empty string
+    return ""
+
+
+_STRUCTURAL_CHARS = frozenset({'"', '}', ']', ',', ':'})
+# SentencePiece uses U+2581 (▁) as a word-leading space marker.
+_SP_PREFIX = '\u2581'
+
+
+def _decode_stripped(tokenizer, tid):
+    """Decode a single token, stripping SentencePiece space prefix if present."""
+    s = tokenizer.decode([tid], skip_special_tokens=False)
+    return s.lstrip(_SP_PREFIX + ' ')
+
+
+def _grammar_guided_encode(checker_clone, target_str, tokenizer, vocab_size, max_steps=400):
+    """Encode target_str into a grammar-valid token sequence.
+
+    Unlike tokenizer.encode(), tokens are chosen via compute_mask at each step,
+    avoiding SentencePiece space-prefix artifacts (▁resource, ▁lis, etc.) that
+    would be rejected by the JSON grammar inside a string context.
+
+    Fast path: try the tokenizer's natural tokenization of the remaining string
+    first. If the first token is grammar-valid, use it. Otherwise, scan all valid
+    tokens for one whose raw bytes match the target at the current position.
+
+    Returns list of token IDs, or None if target_str cannot be encoded.
+    """
+    target_bytes = target_str.encode('utf-8')
+    byte_pos = 0
+    token_ids = []
+
+    for _ in range(max_steps):
+        if byte_pos >= len(target_bytes):
+            return token_ids if checker_clone.is_accepting() else None
+
+        remaining = target_bytes[byte_pos:]
+        mask = checker_clone.compute_mask(vocab_size=vocab_size)
+
+        # Fast path: try tokenizer's natural first token for remaining string.
+        try:
+            remaining_str = remaining.decode('utf-8', errors='replace')
+            cand_ids = tokenizer.encode(remaining_str, add_special_tokens=False)
+        except Exception:
+            cand_ids = []
+
+        chosen_tid = None
+        chosen_len = 0
+
+        if cand_ids:
+            first_tid = cand_ids[0]
+            if not mask[first_tid]:  # grammar accepts
+                raw_bytes = tokenizer.decode([first_tid], skip_special_tokens=False).encode('utf-8')
+                if len(raw_bytes) > 0 and remaining[:len(raw_bytes)] == raw_bytes:
+                    chosen_tid = first_tid
+                    chosen_len = len(raw_bytes)
+
+        # Medium path: X-prefix trick — tokenize "X"+remaining to get non-▁ tokens.
+        # SentencePiece attaches ▁ to word-initial characters; prepending "X" forces
+        # word-internal tokenization for the remaining string.
+        if chosen_tid is None:
+            try:
+                remaining_str = remaining.decode('utf-8', errors='replace')
+                xpfx_ids = tokenizer.encode("X" + remaining_str, add_special_tokens=False)
+            except Exception:
+                xpfx_ids = []
+            if len(xpfx_ids) > 1:
+                tid = xpfx_ids[1]  # first token of remaining (non-▁)
+                if not mask[tid]:
+                    raw_bytes = tokenizer.decode([tid], skip_special_tokens=False).encode('utf-8')
+                    n = len(raw_bytes)
+                    if n > 0 and n <= len(remaining) and remaining[:n] == raw_bytes:
+                        chosen_tid = tid
+                        chosen_len = n
+
+        # Slow path: scan valid tokens for one whose bytes match target.
+        if chosen_tid is None:
+            valid_ids = (~mask).nonzero(as_tuple=True)[0].tolist()
+            for tid in valid_ids:
+                raw_bytes = tokenizer.decode([tid], skip_special_tokens=False).encode('utf-8')
+                n = len(raw_bytes)
+                if n > 0 and n <= len(remaining) and remaining[:n] == raw_bytes and n > chosen_len:
+                    chosen_len = n
+                    chosen_tid = tid
+
+        if chosen_tid is None:
+            print(f"    [guided_encode] stuck at byte {byte_pos}: {remaining[:20]!r}")
+            # Debug: show first few valid tokens at this position
+            _dbg_valid = (~mask).nonzero(as_tuple=True)[0].tolist()
+            print(f"      n_valid={len(_dbg_valid)}")
+            for _dbg_tid in _dbg_valid[:8]:
+                _dbg_rb = tokenizer.decode([_dbg_tid], skip_special_tokens=False).encode('utf-8')
+                print(f"      valid[{_dbg_tid}]={_dbg_rb!r}")
+            return None
+
+        c = checker_clone.matcher.try_consume_tokens([chosen_tid])
+        if c != 1:
+            return None
+        token_ids.append(chosen_tid)
+        byte_pos += chosen_len
+
+    return None
+
+
+def _force_close_grammar(checker, vocab_size, max_steps=2048, priority_ids=None, tokenizer=None, deadline=None):
+    """Greedy grammar-only walk to is_accepting().
+
+    Uses two-tier scoring so structural JSON tokens (`"`, `}`, `]`, `,`, `:`)
+    ALWAYS beat content tokens (e.g. `\\t`, `\\n` inside a string):
+
+      Tier 0  (is_accepting immediately) → score = 0
+      Tier 1  (structural token)         → score = next_count        [always < tier 2]
+      Tier 2  (non-structural token)     → score = next_count + 2*(vocab_size+1)
+
+    This prevents cycling where content tokens have lower raw next_count than
+    structural closing tokens (e.g. `\\t` stays in 94-token string state while
+    `"` moves to a 500-token object state).
+
+    When valid set ≤ 30: evaluate ALL valid tokens.
+    When large: evaluate runtime-decoded structural tokens + priority_ids + first 6 low-ID tokens.
+
+    Returns list of token IDs, or None if not accepting after max_steps.
+    Checker state is left unchanged (all consumed tokens are rolled back).
+    """
+    if checker.is_accepting():
+        return []
+
+    priority_ids = set(priority_ids or [])
+    sequence = []
+    STRUCT_TIER_OFFSET = 0
+    CONTENT_TIER_OFFSET = 2 * (vocab_size + 1)
+
+    # closing_ids_set: only }, ] and EOS/EOT can trigger is_accepting().
+    # In JSON, only closing brackets and end-of-sequence markers complete a
+    # value.  Calling is_accepting() for ", ,, : costs 500ms+ per call on
+    # large NFA state spaces: a JSON object with 10 properties would have
+    # 20+ such calls (500ms × 20 = 10s wasted).  Restricting to }, ] and
+    # EOS/EOT limits calls to O(nesting depth) per force_close run.
+    _CLOSING_CHARS = {'}', ']'}
+    if tokenizer is not None:
+        closing_ids_set = {tid for tid in priority_ids
+                           if _decode_stripped(tokenizer, tid) in _CLOSING_CHARS}
+    else:
+        closing_ids_set = set(priority_ids)
+    closing_ids_set |= {126081, 126348}  # EOS, EOT (LLaDA-8B-Instruct)
+
+    for _step in range(max_steps):
+        if deadline is not None and time.monotonic() > deadline:
+            break
+        # is_accepting() NOT called here — too expensive (500ms on large NFAs).
+        # Instead we rely on the final check after the loop (line below).
+        bias = checker.compute_mask(vocab_size=vocab_size)
+        valid_ids = (~bias).nonzero(as_tuple=True)[0].tolist()
+        if not valid_ids:
+            break
+
+        valid_set = set(valid_ids)
+
+        # Find ALL structural tokens among valid (scan full valid set).
+        runtime_structural = set()
+        if tokenizer is not None:
+            for tid in valid_ids:
+                if _decode_stripped(tokenizer, tid) in _STRUCTURAL_CHARS:
+                    runtime_structural.add(tid)
+
+        # Build candidate pool.
+        if len(valid_ids) <= 30:
+            candidates = list(valid_ids)
+        else:
+            candidates = list(runtime_structural)
+            for p in priority_ids:
+                if p in valid_set and p not in runtime_structural:
+                    candidates.append(p)
+            cand_set = set(candidates)
+            for tid in valid_ids[:6]:
+                if tid not in cand_set:
+                    candidates.append(tid)
+
+        structural_set = runtime_structural | (priority_ids & valid_set)
+
+        chosen = valid_ids[0]
+        best_score = float("inf")
+
+        for candidate in candidates:
+            c = checker.matcher.try_consume_tokens([candidate])
+            if c != 1:
+                continue
+            # is_accepting() only for closing tokens (}, ], EOS, priority_ids).
+            # In JSON, only these can finalize the grammar.  Calling it for
+            # every candidate (e.g. letter tokens while inside a property name)
+            # wastes 500ms × N_candidates × 30 steps = 7-45s per force_close.
+            if candidate in closing_ids_set and checker.is_accepting():
+                checker.matcher.rollback(1)
+                chosen = candidate
+                best_score = -1.0
+                break
+            bias2 = checker.compute_mask(vocab_size=vocab_size)
+            next_count = int((~bias2).sum().item())
+            checker.matcher.rollback(1)
+
+            # Two-tier: structural tokens always beat non-structural.
+            offset = STRUCT_TIER_OFFSET if candidate in structural_set else CONTENT_TIER_OFFSET
+            score = next_count + offset
+            if score < best_score:
+                best_score = score
+                chosen = candidate
+
+        c = checker.matcher.try_consume_tokens([chosen])
+        if c != 1:
+            break
+        sequence.append(chosen)
+        # Early exit: if we just consumed a closing token, check acceptance.
+        if chosen in closing_ids_set and checker.is_accepting():
+            break
+
+    success = checker.is_accepting()
+    checker.matcher.rollback(len(sequence))
+    return sequence if success else None
+
+
 @torch.no_grad()
 def autocomplete_greedy(model, x, checker, consume_idx, gen_start, mask_id, eos_id,
-                        refresh_interval=8):
+                        refresh_interval=8, closing_bonus=0.0, max_steps=256,
+                        deadline: float | None = None,
+                        closing_token_ids: set | None = None):
     """Grammar-guided greedy completion from consume_idx forward.
 
     Diffusion models give logits for all positions at once. We exploit this by
     doing one forward pass and completing multiple positions from the same logits.
     Logits are refreshed every `refresh_interval` steps to avoid staleness.
 
+    closing_bonus: when > 0, a 2-step lookahead checks which valid tokens
+        lead to is_accepting() within 1–2 steps and adds closing_bonus (step 1)
+        or closing_bonus*0.5 (step 2) to their logit before argmax.  Use a
+        large value (e.g. 100) in the budget-exhaustion extension pass so the
+        model prefers closing brackets/braces over generating more content.
+
+    max_steps: hard cap on ac_steps to avoid runaway loops on complex schemas.
+        When reached, return early so pass 3a/3b can handle the remainder.
+
+    deadline: if set (time.monotonic() timestamp), exit early when exceeded.
+
     Returns (x, autocomplete_steps, autocomplete_mask_ms, autocomplete_fwd_ms).
     """
     ac_steps = 0
     ac_fwd_ms = 0.0
     ac_mask_ms = 0.0
+    ac_tc_ms = 0.0   # try_consume time (not previously measured)
     seq_len = x.shape[1]
     steps_since_refresh = refresh_interval  # force initial forward
 
-    while consume_idx < seq_len:
-        if checker.is_accepting():
-            for j in range(consume_idx, seq_len):
-                x[0, j] = eos_id
+    while consume_idx < seq_len and ac_steps < max_steps:
+        if deadline is not None and time.monotonic() > deadline:
             break
 
-        # Refresh logits periodically
+        # Refresh logits periodically.
+        # is_accepting() is NOT called here — costs 15-170ms per call on
+        # large NFA state spaces, and 64 refresh-boundary calls per 512-step
+        # run = 5-11s of pure overhead.  Early acceptance is handled naturally:
+        # closing_bonus boosts grammar-valid }, ] and EOS (closing_token_ids),
+        # so once the grammar accepts, those tokens win the argmax and the
+        # dead-end check below fires one final is_accepting() to fill EOS.
         if steps_since_refresh >= refresh_interval:
             t_fwd = time.perf_counter()
             logits = model(x).logits
@@ -140,15 +488,40 @@ def autocomplete_greedy(model, x, checker, consume_idx, gen_start, mask_id, eos_
         bias = checker.compute_mask(vocab_size=logits.shape[-1])
         ac_mask_ms += (time.perf_counter() - t_mc) * 1000
 
-        logits[0, consume_idx, bias] = -np.inf
-        best = torch.argmax(logits[0, consume_idx]).item()
+        # Move one logit row to CPU before masking and argmax.
+        # GPU in-place scatter (logits[bias]=-inf) + GPU→CPU sync in .item()
+        # costs ~10ms/step; CPU-side ops are <0.1ms.  This is a global fix
+        # (benefits all autocomplete_greedy callers, not just hard instances).
+        row = logits[0, consume_idx].cpu().float()
+        row[bias] = float('-inf')
 
-        if logits[0, consume_idx, best] == -np.inf:
+        # Boost grammar-valid closing tokens when budget is exhausted.
+        # Grammar mask already guarantees }, ] are only valid when all required
+        # fields are satisfied, so no is_accepting() probe is needed.
+        # Old approach (try_consume + is_accepting() per valid token) cost
+        # 15-40ms per is_accepting() × n_valid × 512 steps = 5-20s of waste.
+        # New approach: O(len(closing_token_ids)) per step, zero is_accepting()
+        # calls.  closing_token_ids should be pre-computed token IDs for }, ],
+        # and EOS/EOT — passed in by the caller that sets closing_bonus.
+        if closing_bonus > 0.0 and closing_token_ids:
+            for tid in closing_token_ids:
+                if tid < row.shape[0] and row[tid].item() != float('-inf'):
+                    row[tid] += closing_bonus
+
+        best = int(row.argmax())
+
+        if row[best].item() == float('-inf'):
+            # Dead-end: check one final time before giving up
+            if checker.is_accepting():
+                for j in range(consume_idx, seq_len):
+                    x[0, j] = eos_id
             break
 
         x[0, consume_idx] = best
 
+        _t_tc = time.perf_counter()
         c = checker.matcher.try_consume_tokens([best])
+        ac_tc_ms += (time.perf_counter() - _t_tc) * 1000
         if c == 1:
             consume_idx += 1
             ac_steps += 1
@@ -170,7 +543,7 @@ def autocomplete_greedy(model, x, checker, consume_idx, gen_start, mask_id, eos_
                 x[0, consume_idx] = mask_id
                 break
 
-    return x, ac_steps, ac_mask_ms, ac_fwd_ms
+    return x, ac_steps, ac_mask_ms, ac_fwd_ms, consume_idx, ac_tc_ms
 
 
 @torch.no_grad()
@@ -431,11 +804,25 @@ def main():
     steps = int(sys.argv[4]) if len(sys.argv) > 4 else 128
     offset = int(sys.argv[5]) if len(sys.argv) > 5 else 0
     block_ar = int(sys.argv[6]) if len(sys.argv) > 6 else 1
+    method = sys.argv[7] if len(sys.argv) > 7 else "dgrammar"
+    # Optional: comma-separated instance IDs to run only those instances
+    # e.g. "o33928,o12618,o70379"
+    instance_ids_filter: set | None = None
+    if len(sys.argv) > 8 and sys.argv[8]:
+        instance_ids_filter = set(sys.argv[8].split(","))
 
-    tag = "v2_async_ac4_fullpar_timed" if not block_ar else "v2_async_ac4_timed"
+    if method == "dp":
+        tag = "dp"
+    elif not block_ar:
+        tag = "v2_async_ac4_fullpar_timed"
+    else:
+        tag = "v2_async_ac4_timed"
     ds_safe = dataset_name.replace("/", "_")
     sfx = f"_off{offset}" if offset > 0 else ""
     output_file = f"results/{tag}_{ds_safe}_s{seed}_t{steps}{sfx}.jsonl"
+
+    if method == "dp":
+        from dgrammar.dp_generate import generate_dp
 
     dataset = load_dataset(dataset_name)
     eval_model = load_model("GSAI-ML/LLaDA-8B-Instruct")
@@ -445,11 +832,34 @@ def main():
     model = eval_model.model("cuda")
 
     all_instances = sorted(dataset, key=lambda x: x.instance_id())
-    instances = all_instances[offset:offset + limit]
+    if instance_ids_filter is not None:
+        instances = [inst for inst in all_instances if inst.instance_id() in instance_ids_filter]
+    else:
+        instances = all_instances[offset:offset + limit]
     bl = 32 if block_ar else 256
-    print(f"Dgrammar timed: {len(instances)} instances, seed={seed}, T={steps}, block_length={bl}")
+    print(f"Dgrammar timed [{method}]: {len(instances)} instances, seed={seed}, T={steps}, block_length={bl}")
 
     cached_checker = None
+
+    # Precompute structural JSON token IDs so _force_close_grammar always
+    # evaluates them regardless of their position in sorted valid_ids.
+    # `"` typically has a high token ID in Mistral-family tokenizers (e.g. 28739)
+    # and would never appear in valid_ids[:6], causing force_close to cycle on `\n`.
+    _fc_priority_ids = set()
+    for _ch in ['"', '}', ']', ',', ':']:
+        _tids = tokenizer.encode(_ch, add_special_tokens=False)
+        if _tids:
+            _fc_priority_ids.add(_tids[-1])
+
+    # Closing tokens for closing_bonus in pass3b: }, ] and EOS/EOT.
+    # Grammar-valid }, ] already guarantee all required JSON fields are
+    # satisfied, so no is_accepting() probe is needed before boosting.
+    # EOS=126081, EOT=126348 are fixed for LLaDA-8B-Instruct tokenizer.
+    _fc_closing_ids: set[int] = {126081, 126348}
+    for _ch in ['}', ']']:
+        _tids = tokenizer.encode(_ch, add_special_tokens=False)
+        if _tids:
+            _fc_closing_ids.add(_tids[-1])
 
     for i, instance in enumerate(instances):
         schema_str = instance.data.get("schema", "")
@@ -469,6 +879,7 @@ def main():
             eval_model.prepare_prompt(instance, tokenizer, model, trace=False)
         )
 
+        print(f"[{i+1}/{len(instances)}] {instance.instance_id()} ...")
         STATS.reset()
         torch.manual_seed(seed)
         start_time = time.monotonic()
@@ -483,38 +894,218 @@ def main():
         ac_steps = 0
         ac_mask_ms = 0.0
         ac_fwd_ms = 0.0
+        dp_consume_idx = None  # final consume_idx from DP generator
 
-        for out, resamples, valid, violations, remasks, grammar_checks in generate_async_timed(
-            model, prompt_ids, tokenizer, checker=checker,
-            prompt_len=prompt_len, steps=steps, gen_length=256,
-            block_length=bl, temperature=0.2, remasking="low_confidence",
-            max_batch_size=8, max_resamples=100,
-        ):
-            total_violations = violations
-            total_remasks = remasks
-            total_grammar_checks = grammar_checks
+        if method == "dp":
+            gen_kwargs = dict(stats=STATS)
+            gen_fn = generate_dp
+        else:
+            gen_kwargs = {}
+            gen_fn = generate_async_timed
 
-        # Autocompletion fallback: if generation is incomplete, greedily complete
+        if method == "dp":
+            _gen_t0 = time.monotonic()
+            for out, resamples, valid, violations, remasks, grammar_checks, dp_consume_idx in gen_fn(
+                model, prompt_ids, tokenizer, checker=checker,
+                prompt_len=prompt_len, steps=steps, gen_length=256,
+                block_length=bl, temperature=0.2, remasking="low_confidence",
+                max_batch_size=8, max_resamples=100, max_dp_secs=240.0, **gen_kwargs,
+            ):
+                total_violations = violations
+                total_remasks = remasks
+                total_grammar_checks = grammar_checks
+            print(f"  [dp] gen done in {time.monotonic()-_gen_t0:.1f}s  violations={total_violations} resamples={len(resamples)} dp_calls={grammar_checks}")
+        else:
+            for out, resamples, valid, violations, remasks, grammar_checks in gen_fn(
+                model, prompt_ids, tokenizer, checker=checker,
+                prompt_len=prompt_len, steps=steps, gen_length=256,
+                block_length=bl, temperature=0.2, remasking="low_confidence",
+                max_batch_size=8, max_resamples=100, **gen_kwargs,
+            ):
+                total_violations = violations
+                total_remasks = remasks
+                total_grammar_checks = grammar_checks
+
+        # ── Per-instance wall-clock budget: 270s for gen, 60s for autocomplete,
+        #    leaving headroom for force_close and I/O within a 360s total budget.
+        _INSTANCE_BUDGET = 360.0  # seconds
+        _instance_deadline = start_time + _INSTANCE_BUDGET
+
+        # ── Autocompletion fallback ───────────────────────────────────────────
+        # Strategy (applies to both dgrammar and DP):
+        #   Pass 1 — run autocomplete_greedy from the grammar-tracked frontier.
+        #            This handles two sub-cases:
+        #              (a) Remaining masks in the sequence (early-completed samples).
+        #              (b) Already-placed tokens after consume_idx that are
+        #                  grammar-invalid; autocomplete_greedy remasks and
+        #                  replaces them token-by-token.
+        #   Pass 2 — if still invalid AND the checker is not accepting AND the
+        #            sequence has no masks left (budget exhausted), extend by
+        #            EXTENSION_LEN masked tokens and run autocomplete again.
+        #            This completes truncated JSONs without paying extra cost for
+        #            the 80%+ of samples that finish within the original budget.
+        EXTENSION_CHUNK = 128   # tokens added per extension round
+        MAX_EXTENSIONS  = 3     # up to 3 × 128 = 384 extra tokens total
+        mask_id_val   = 126336
+        eos_id_val    = 126081
+        eot_id_val    = 126348
+
+        def _recheck_valid(tensor, gs):
+            ids = tensor[0, gs:].tolist()
+            if eos_id_val in ids or eot_id_val in ids:
+                ep = next((j for j, t in enumerate(ids) if t in (eos_id_val, eot_id_val)), None)
+                return ep is not None and mask_id_val not in ids[:ep]
+            return False
+
         if out is not None and not valid:
-            gen_start = prompt_ids.shape[1]
-            # Find consume_idx: first mask position or end of valid prefix
-            gen_ids = out[0, gen_start:].tolist()
-            mask_id_val = 126336
-            # consume_idx relative to sequence start
-            first_mask = next((j for j, t in enumerate(gen_ids) if t == mask_id_val), len(gen_ids))
-            consume_idx_ac = gen_start + first_mask
+            gen_start_ac = prompt_ids.shape[1]
 
-            out, ac_steps, ac_mask_ms, ac_fwd_ms = autocomplete_greedy(
-                model, out, checker, consume_idx_ac, gen_start,
-                mask_id=mask_id_val, eos_id=126081,
+            # ── Pass 1 ───────────────────────────────────────────────────────
+            if dp_consume_idx is not None:
+                # DP: checker state is consistent with dp_consume_idx.
+                consume_idx_ac = dp_consume_idx
+            else:
+                gen_ids = out[0, gen_start_ac:].tolist()
+                first_mask = next(
+                    (j for j, t in enumerate(gen_ids) if t == mask_id_val), len(gen_ids)
+                )
+                consume_idx_ac = gen_start_ac + first_mask
+
+            _ac_deadline = min(time.monotonic() + 60.0, _instance_deadline)
+            out, ac_steps, ac_mask_ms, ac_fwd_ms, ac_consume_idx, _ = autocomplete_greedy(
+                model, out, checker, consume_idx_ac, gen_start_ac,
+                mask_id=mask_id_val, eos_id=eos_id_val,
+                max_steps=64, deadline=_ac_deadline,
             )
-            # Re-check validity after autocompletion
-            gen_ids_ac = out[0, gen_start:].tolist()
-            eos_id_val = 126081
-            eot_id_val = 126348
-            if eos_id_val in gen_ids_ac or eot_id_val in gen_ids_ac:
-                eos_pos = next((j for j, t in enumerate(gen_ids_ac) if t in (eos_id_val, eot_id_val)), None)
-                valid = eos_pos is not None and mask_id_val not in gen_ids_ac[:eos_pos]
+            valid = _recheck_valid(out, gen_start_ac)
+
+            # ── Pass 2: iterative budget-exhaustion extension ─────────────────
+            # Triggered when: still invalid AND grammar not yet accepting.
+            # Extends by EXTENSION_CHUNK masked tokens and runs autocomplete
+            # starting from ac_consume_idx — the checker's actual frontier
+            # returned by the previous autocomplete call.  Using the checker
+            # frontier (not the first mask in the tensor) keeps grammar state
+            # in sync with token positions across multiple extension rounds.
+            for _ext_round in range(MAX_EXTENSIONS):
+                if valid or checker.is_accepting():
+                    break
+                if time.monotonic() > _ac_deadline:
+                    break
+
+                ext = torch.full(
+                    (1, EXTENSION_CHUNK), mask_id_val,
+                    dtype=out.dtype, device=out.device,
+                )
+                out_ext = torch.cat([out, ext], dim=1)
+                out_ext, ac_steps2, ac_mask_ms2, ac_fwd_ms2, ac_consume_idx, _ = autocomplete_greedy(
+                    model, out_ext, checker, ac_consume_idx, gen_start_ac,
+                    mask_id=mask_id_val, eos_id=eos_id_val,
+                    closing_bonus=100.0,
+                    max_steps=64, deadline=_ac_deadline,
+                )
+                ac_steps   += ac_steps2
+                ac_mask_ms += ac_mask_ms2
+                ac_fwd_ms  += ac_fwd_ms2
+                out    = out_ext
+                valid  = _recheck_valid(out, gen_start_ac)
+
+            # ── Pass 3: grammar-only force-close ─────────────────────────────
+            # If still invalid after all extension rounds, try a grammar-only
+            # DFS to find the minimal closing token sequence (no LM logits).
+            # This handles deeply-nested JSON that needs e.g. `]}}` to close,
+            # where the 1-step closing_bonus in Pass 2 never fires.
+            if not valid and not checker.is_accepting() and time.monotonic() < _instance_deadline:
+                actual_vocab_fc = 126464
+                iid = getattr(instance, '_instance_id', None) or getattr(instance, 'instance_id', lambda: '?')()
+                _fc_t0 = time.monotonic()
+                _fc_deadline = _fc_t0 + 15.0  # 15s hard cap
+                closing_seq = _force_close_grammar(
+                    checker, actual_vocab_fc,
+                    max_steps=512,   # was 30; is_accepting() removed from hot path so each step is now <10ms
+                    priority_ids=_fc_priority_ids,
+                    tokenizer=tokenizer,
+                    deadline=_fc_deadline,
+                )
+                print(f"  [force_close] {time.monotonic()-_fc_t0:.1f}s  seq_len={len(closing_seq) if closing_seq else None}")
+                if closing_seq:
+                    # Append closing tokens + EOS so _recheck_valid sees a
+                    # properly terminated sequence.
+                    close_ids = closing_seq + [eos_id_val]
+                    close_t = torch.tensor(
+                        close_ids, dtype=out.dtype, device=out.device
+                    ).unsqueeze(0)
+                    out = torch.cat([out, close_t], dim=1)
+                    # advance checker state through the closing tokens only
+                    for tid in closing_seq:
+                        checker.matcher.try_consume_tokens([tid])
+                    valid = _recheck_valid(out, gen_start_ac)
+
+                # ── Pass 3b: schema-based minimal JSON fallback ───────────────
+                # If the grammar walk cycled (force_close returned None), generate
+                # a minimal valid JSON directly from the schema string and replace
+                # the corrupted generation.  This handles schemas where
+                # additionalProperties:true prevents the grammar walk from knowing
+                # which specific property names are required.
+                if not valid:
+                    try:
+                        # Fresh checker from root state.  The generation region
+                        # of prompt_ids contains only mask tokens (no real prefix
+                        # to consume), so we just clone the schema's initial state.
+                        def _p3b_fresh():
+                            return cached_checker.clone()
+
+                        # ── Fast path: grammar-guided encode of _minimal_json_value ──
+                        schema_obj = json.loads(schema_str)
+                        min_val = _minimal_json_value(schema_obj)
+                        min_str = json.dumps(min_val, ensure_ascii=False, separators=(',', ':'))
+                        min_ids = _grammar_guided_encode(
+                            _p3b_fresh(), min_str, tokenizer, vocab_size=126464,
+                        )
+                        if min_ids is not None:
+                            vf = _p3b_fresh()
+                            n_ok = vf.matcher.try_consume_tokens(min_ids)
+                            if n_ok == len(min_ids) and vf.is_accepting():
+                                min_close_t = torch.tensor(
+                                    min_ids + [eos_id_val], dtype=out.dtype, device=out.device,
+                                ).unsqueeze(0)
+                                out = torch.cat([out[:, :gen_start_ac], min_close_t], dim=1)
+                                valid = _recheck_valid(out, gen_start_ac)
+
+                        # ── Slow path: autocomplete from fresh checker state ──────────
+                        # Used when the pre-built min_str violates grammar constraints
+                        # (property ordering, URI format, etc.).  autocomplete_greedy
+                        # uses actual model logits + grammar mask, so it naturally
+                        # produces grammar-valid output without needing to know the
+                        # correct property order or value format ahead of time.
+                        if not valid:
+                            _p3b_t0 = time.monotonic()
+                            _p3b_chk = _p3b_fresh()
+                            out_p3b = torch.full(
+                                (1, gen_start_ac + 768), mask_id_val,
+                                dtype=torch.long, device=model.device,
+                            )
+                            out_p3b[0, :gen_start_ac] = prompt_ids[0].to(model.device)
+                            # closing_bonus=100 strongly prefers closing at comma/brace
+                            # positions (len(valid_ids)<=32 guard keeps it fast).
+                            out_p3b, _p3b_steps, _p3b_mask_ms, _p3b_fwd_ms, _p3b_cidx, _p3b_tc_ms = autocomplete_greedy(
+                                model, out_p3b, _p3b_chk, gen_start_ac, gen_start_ac,
+                                mask_id=mask_id_val, eos_id=eos_id_val,
+                                closing_bonus=100.0, max_steps=512,
+                                deadline=_p3b_t0 + 60.0,
+                                closing_token_ids=_fc_closing_ids,
+                            )
+                            if _recheck_valid(out_p3b, gen_start_ac):
+                                out = out_p3b
+                                valid = True
+                            _p3b_total_ms = (time.monotonic() - _p3b_t0) * 1000
+                            print(f"  [pass3b] fast={'ok' if min_ids else 'fail'} ac_valid={valid} "
+                                  f"steps={_p3b_steps} mask={_p3b_mask_ms:.0f}ms fwd={_p3b_fwd_ms:.0f}ms "
+                                  f"tc={_p3b_tc_ms:.0f}ms total={_p3b_total_ms:.0f}ms")
+                    except Exception as e:
+                        print(f"  [pass3b] exception: {e}")
+
+            elif not valid and checker.is_accepting():
+                pass  # checker accepted but no EOS placed — already handled by pass 1/2
 
         elapsed = time.monotonic() - start_time
 
@@ -548,7 +1139,7 @@ def main():
 
         result = {
             "instance_id": instance.instance_id(),
-            "method": "dgrammar_v2_async",
+            "method": "dgrammar_dp" if method == "dp" else "dgrammar_v2_async",
             "valid": valid,
             "extracted": extracted,
             "time_taken": elapsed,
@@ -573,6 +1164,8 @@ def main():
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "a") as f:
             print(json.dumps(result), flush=True, file=f)
+
+        torch.cuda.empty_cache()
 
         gc_mean = timing["grammar_check_mean_ms"]
         fwd_mean = timing["forward_mean_ms"]

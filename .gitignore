@@ -1,6 +1,7 @@
 papers/
 .DS_Store
 .claude/
+not_used/
 __pycache__/
 */__pycache__/
 *.pyc

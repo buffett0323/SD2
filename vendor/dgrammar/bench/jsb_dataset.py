@@ -7,7 +7,7 @@ runners can use them without modification.
 Usage:
     import jsb_dataset  # registers jsb_hard, jsb_medium, etc.
     from constrained_diffusion.eval.dllm.dataset import load_dataset
-    dataset = load_dataset("jsb_hard")
+    dataset = load_dataset("jsb_hard")  # test split only; use jsb_hard_all for train+val+test
 """
 
 from typing import Iterator
@@ -74,7 +74,7 @@ class JSBInstance(Instance):
 class JSBDataSet(DataSet):
     """Wraps a JSONSchemaBench subset as a DataSet."""
 
-    def __init__(self, subset: str, split: str = "all"):
+    def __init__(self, subset: str, split: str = "test"):
         super().__init__()
         self.subset = subset
         self.split = split
@@ -112,8 +112,13 @@ _SUBSETS = {
 }
 
 for name, subset in _SUBSETS.items():
-    for reg_name, split in [(name, "all"), (f"{name}_test", "test"),
-                             (f"{name}_train", "train"), (f"{name}_val", "val")]:
+    for reg_name, split in [
+        (name, "test"),
+        (f"{name}_all", "all"),
+        (f"{name}_test", "test"),
+        (f"{name}_train", "train"),
+        (f"{name}_val", "val"),
+    ]:
         try:
             register_dataset(reg_name, JSBDataSet(subset, split=split))
         except ValueError:
