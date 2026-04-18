@@ -1,2 +1,100 @@
 \relax 
-\gdef \@abspage@last{1}
+\bibstyle{acl_natbib}
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{geng2025jsonschemabenchrigorousbenchmarkstructured}
+\citation{microsoft2025llguidance}
+\citation{llada}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{nousresearch2024jsonmodeeval}
+\citation{geng2025jsonschemabenchrigorousbenchmarkstructured}
+\citation{microsoft2025llguidance}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\citation{llada}
+\citation{dream}
+\citation{chen2026dflashblockdiffusionflash}
+\citation{agrawal2026spiffymultiplyingdiffusionllm}
+\citation{outlines}
+\citation{dong2024xgrammar}
+\citation{cd4dllm}
+\citation{suresh2025dingoconstrainedinferencediffusion}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{li2026planverifyfillstructured}
+\citation{su2026vectorizingtrieefficientconstrained}
+\citation{leviathan2023fastinferencetransformersspeculative}
+\citation{geng2025jsonschemabenchrigorousbenchmarkstructured}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Discrete diffusion and parallel decoding.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Constrained decoding in autoregressive models.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Constrained decoding for diffusion.}{2}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Sparse transition structures and DP cost.}{2}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Parallel verification and joint decisions.}{2}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Data}{2}{section.3}\protected@file@percent }
+\newlabel{sec:data}{{3}{2}{Data}{section.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{Scale and splits.}{2}{section*.6}\protected@file@percent }
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{microsoft2025llguidance}
+\citation{microsoft2025llguidance}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\@writefile{toc}{\contentsline {paragraph}{Preprocessing.}{3}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Method}{3}{section.4}\protected@file@percent }
+\newlabel{sec:method}{{4}{3}{Method}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Baselines reproduced}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Dgrammar: proposed deterministic frontier stack}{3}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:dgrammar}{{4.2}{3}{Dgrammar: proposed deterministic frontier stack}{subsection.4.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Constraint at the frontier only.}{3}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Incremental prefix semantics.}{3}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Adaptive commit (AIMD style).}{3}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Violator remask and in place resampling.}{3}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Early accept and async overlap.}{3}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}DPGrammar: segment DP on top of Dgrammar}{3}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:dpg}{{4.3}{3}{DPGrammar: segment DP on top of Dgrammar}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Completion after generation}{3}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Implementation and compute}{3}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Experimental design and metrics}{3}{subsection.4.6}\protected@file@percent }
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Dgrammar} (blue tinted): one denoising step applies a full model forward, frontier masking and AIMD unmasking, and incremental \texttt  {extend\_prefix}. \textbf  {DPGrammar} (orange): when a violator is detected at position $c$, \texttt  {dp\_fix\_prefix} jointly rewrites the span $[c,s)$ via Viterbi over top-$K$ tokens before falling back to greedy remasking.}}{4}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:dp-denoise}{{1}{4}{\textbf {Dgrammar} (blue tinted): one denoising step applies a full model forward, frontier masking and AIMD unmasking, and incremental \texttt {extend\_prefix}. \textbf {DPGrammar} (orange): when a violator is detected at position $c$, \texttt {dp\_fix\_prefix} jointly rewrites the span $[c,s)$ via Viterbi over top-$K$ tokens before falling back to greedy remasking}{figure.caption.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{4}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{5}{4}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{LAVE vs.\ Dgrammar (engineering step).}{4}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Dgrammar vs.\ DPGrammar (principled step).}{4}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Qualitative observations.}{4}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Discussion}{4}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Interpretation.}{4}{section*.20}\protected@file@percent }
+\citation{suresh2025dingoconstrainedinferencediffusion}
+\citation{su2026vectorizingtrieefficientconstrained}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces One denoising step under schema \texttt  {\{"count":int,\,"label":str\}}. \textbf  {LAVE} \citep  {zhang2026lookaheadthenverifyreliableconstraineddecoding} (left) samples $K$ random completions at each frontier token, accepting it only when $\geq \!1$ suffix is valid—stochastic and $K\!\times $ more expensive per token, hitting the 120\,s per-instance timeout on hard schemas. \textbf  {Dgrammar} (right) runs \texttt  {compute\_mask} on the incremental FSM state and unmasks an entire block under that mask in one forward pass, overlapped with the next mask computation; the result is deterministic.}}{5}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:denoise-compare}{{2}{5}{One denoising step under schema \texttt {\{"count":int,\,"label":str\}}. \textbf {LAVE} \citep {zhang2026lookaheadthenverifyreliableconstraineddecoding} (left) samples $K$ random completions at each frontier token, accepting it only when $\geq \!1$ suffix is valid—stochastic and $K\!\times $ more expensive per token, hitting the 120\,s per-instance timeout on hard schemas. \textbf {Dgrammar} (right) runs \texttt {compute\_mask} on the incremental FSM state and unmasks an entire block under that mask in one forward pass, overlapped with the next mask computation; the result is deterministic}{figure.caption.14}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \texttt  {jsb\_medium} results (seed 0, $T{=}128$ steps). Dgrammar and DPGrammar are evaluated on the same 511 instances (nine-shard protocol); DPGrammar adds \texttt  {dp\_fix\_prefix} on top. LAVE \citep  {zhang2026lookaheadthenverifyreliableconstraineddecoding} uses a nine-shard split covering 586 instances.}}{5}{table.caption.18}\protected@file@percent }
+\newlabel{tab:main}{{1}{5}{\texttt {jsb\_medium} results (seed 0, $T{=}128$ steps). Dgrammar and DPGrammar are evaluated on the same 511 instances (nine-shard protocol); DPGrammar adds \texttt {dp\_fix\_prefix} on top. LAVE \citep {zhang2026lookaheadthenverifyreliableconstraineddecoding} uses a nine-shard split covering 586 instances}{table.caption.18}{}}
+\@writefile{toc}{\contentsline {paragraph}{Strengths.}{5}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Weaknesses and surprises.}{5}{section*.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Implications.}{5}{section*.23}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Conclusion and Future Work}{5}{section.7}\protected@file@percent }
+\bibdata{custom}
+\bibcite{agrawal2026spiffymultiplyingdiffusionllm}{{1}{2026}{{Agrawal et~al.}}{{Agrawal, Garrepalli, Goel, Lee, Lott, and Porikli}}}
+\bibcite{chen2026dflashblockdiffusionflash}{{2}{2026}{{Chen et~al.}}{{Chen, Liang, and Liu}}}
+\bibcite{dong2024xgrammar}{{3}{2024}{{Dong et~al.}}{{Dong, Ruan, Cai, Lai, Xu, Zhao, and Chen}}}
+\bibcite{geng2025jsonschemabenchrigorousbenchmarkstructured}{{4}{2025}{{Geng et~al.}}{{Geng, Cooper, Moskal, Jenkins, Berman, Ranchin, West, Horvitz, and Nori}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces All three methods on the same violation. \textbf  {(1)}~A batch unmask produces \texttt  {"label"} before \texttt  {"count"}, violating the alphabetical key-order constraint; the violator at $c$ spans $[c,s)$. \textbf  {(2a)}~\textbf  {LAVE} samples $K$ random suffixes from $c$ and accepts the token only when $\geq \!1$ is valid—stochastic, commits one token per iteration, and accumulates 222.6 lookahead draws per instance on average. \textbf  {(2b)}~\textbf  {Dgrammar}'s greedy remask is an engineering fix: the grammar mask forces \texttt  {"count"} at $c$, but the value slot still holds \texttt  {"hello"} (string in an integer field) and the original \texttt  {"count"} key remains as a duplicate—causing immediate re-violation at 32.43 avg resamples per instance. \textbf  {(2c)}~\textbf  {DPGrammar}'s \texttt  {dp\_fix\_prefix} is the principled extension: Viterbi over top-$K$ candidates across every position in $[c,s)$ simultaneously finds \texttt  {"count":5,"label":"hello"}—correct order, correct types, no duplicates—in one pass, reducing to 1.06 avg resamples and 99.2\% validity.}}{6}{figure.caption.19}\protected@file@percent }
+\newlabel{fig:dp-validity-boost}{{3}{6}{All three methods on the same violation. \textbf {(1)}~A batch unmask produces \texttt {"label"} before \texttt {"count"}, violating the alphabetical key-order constraint; the violator at $c$ spans $[c,s)$. \textbf {(2a)}~\textbf {LAVE} samples $K$ random suffixes from $c$ and accepts the token only when $\geq \!1$ is valid—stochastic, commits one token per iteration, and accumulates 222.6 lookahead draws per instance on average. \textbf {(2b)}~\textbf {Dgrammar}'s greedy remask is an engineering fix: the grammar mask forces \texttt {"count"} at $c$, but the value slot still holds \texttt {"hello"} (string in an integer field) and the original \texttt {"count"} key remains as a duplicate—causing immediate re-violation at 32.43 avg resamples per instance. \textbf {(2c)}~\textbf {DPGrammar}'s \texttt {dp\_fix\_prefix} is the principled extension: Viterbi over top-$K$ candidates across every position in $[c,s)$ simultaneously finds \texttt {"count":5,"label":"hello"}—correct order, correct types, no duplicates—in one pass, reducing to 1.06 avg resamples and 99.2\% validity}{figure.caption.19}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{6}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Ethical Considerations}{6}{section.9}\protected@file@percent }
+\bibcite{leviathan2023fastinferencetransformersspeculative}{{5}{2023}{{Leviathan et~al.}}{{Leviathan, Kalman, and Matias}}}
+\bibcite{li2026planverifyfillstructured}{{6}{2026}{{Li et~al.}}{{Li, Jiang, Cheng, Fu, Cai, Huang, Ye, Chen, and Hentenryck}}}
+\bibcite{microsoft2025llguidance}{{7}{2025}{{Microsoft}}{{}}}
+\bibcite{cd4dllm}{{8}{2025}{{Mündler et~al.}}{{Mündler, Dekoninck, and Vechev}}}
+\bibcite{llada}{{9}{2025}{{Nie et~al.}}{{Nie, Zhu, You, Zhang, Ou, Hu, Zhou, Lin, Wen, and Li}}}
+\bibcite{nousresearch2024jsonmodeeval}{{10}{2024}{{Nous Research}}{{}}}
+\bibcite{su2026vectorizingtrieefficientconstrained}{{11}{2026}{{Su et~al.}}{{Su, Katsman, Wang, He, Heldt, Keshavan, Wang, Yi, Gao, Dalal, Hong, Chi, and Han}}}
+\bibcite{suresh2025dingoconstrainedinferencediffusion}{{12}{2025}{{Suresh et~al.}}{{Suresh, Banerjee, Ugare, Misailovic, and Singh}}}
+\bibcite{outlines}{{13}{2023}{{Willard and Louf}}{{}}}
+\bibcite{dream}{{14}{2025}{{Ye et~al.}}{{Ye, Xie, Zheng, Gao, Wu, Jiang, Li, and Kong}}}
+\bibcite{zhang2026lookaheadthenverifyreliableconstraineddecoding}{{15}{2026}{{Zhang et~al.}}{{Zhang, Li, Liu, Li, Jia, Li, and Li}}}
+\gdef \@abspage@last{7}
