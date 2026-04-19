@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DPGrammar Demo Presentation</title>
+  <style>
+    :root {
+      --ink: #171717;
+      --muted: #5f6368;
+      --line: #d7dce0;
+      --paper: #f7f8f9;
+      --white: #ffffff;
+      --teal: #007c78;
+      --teal-soft: #dff4f2;
+      --green: #2f8f46;
+      --green-soft: #e5f5e9;
+      --red: #c43b3b;
+      --red-soft: #fde8e7;
+      --amber: #b56b00;
+      --amber-soft: #fff0d6;
+      --charcoal: #2b2d2f;
+      --shadow: 0 18px 45px rgba(23, 23, 23, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      background:
+        linear-gradient(90deg, rgba(0, 124, 120, 0.05) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(0, 124, 120, 0.05) 1px, transparent 1px),
+        var(--paper);
+      background-size: 42px 42px;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      grid-template-rows: auto 1fr auto;
+      padding: 34px 46px 26px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(247,248,249,0.94));
+    }
+
+    .slide.active {
+      display: grid;
+    }
+
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 16px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    h1, h2 {
+      margin: 0;
+      line-height: 1.05;
+      letter-spacing: 0;
+      color: var(--ink);
+    }
+
+    h1 {
+      font-size: clamp(42px, 6vw, 76px);
+      max-width: 980px;
+    }
+
+    h2 {
+      font-size: clamp(31px, 4vw, 54px);
+      max-width: 920px;
+    }
+
+    .subtitle {
+      margin: 22px 0 0;
+      max-width: 820px;
+      color: #333;
+      font-size: clamp(17px, 1.45vw, 23px);
+      line-height: 1.4;
+    }
+
+    .time {
+      min-width: 112px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      padding: 9px 11px;
+      border-radius: 8px;
+      text-align: right;
+      color: var(--muted);
+      box-shadow: var(--shadow);
+    }
+
+    .time strong {
+      display: block;
+      color: var(--charcoal);
+      font-size: 18px;
+    }
+
+    .content {
+      min-height: 0;
+      padding: 24px 0;
+      display: grid;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .cols.wide-left {
+      grid-template-columns: 1.25fr 0.75fr;
+    }
+
+    .cols.wide-right {
+      grid-template-columns: 0.82fr 1.18fr;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .panel h3 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      color: var(--charcoal);
+    }
+
+    .panel p, .panel li {
+      font-size: clamp(15px, 1.25vw, 19px);
+      line-height: 1.4;
+    }
+
+    .panel p {
+      margin: 0 0 13px;
+    }
+
+    .panel ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .headline-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      padding: 18px;
+      min-height: 136px;
+      display: grid;
+      align-content: center;
+      box-shadow: var(--shadow);
+    }
+
+    .metric .value {
+      display: block;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1;
+      font-weight: 850;
+      color: var(--teal);
+    }
+
+    .metric .label {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.32;
+    }
+
+    .tokens {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: clamp(16px, 1.4vw, 22px);
+      line-height: 1;
+    }
+
+    .tok {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--white);
+      padding: 10px 12px;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .mask {
+      color: var(--muted);
+      background: #edf0f2;
+    }
+
+    .bad {
+      color: var(--red);
+      border-color: rgba(196, 59, 59, 0.52);
+      background: var(--red-soft);
+    }
+
+    .good {
+      color: var(--green);
+      border-color: rgba(47, 143, 70, 0.52);
+      background: var(--green-soft);
+    }
+
+    .frontier {
+      color: var(--teal);
+      border-color: rgba(0, 124, 120, 0.58);
+      background: var(--teal-soft);
+    }
+
+    .arrow-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .step {
+      min-height: 180px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .step h3 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .step p {
+      margin: 0;
+      color: #3a3d40;
+      font-size: clamp(15px, 1.15vw, 18px);
+      line-height: 1.36;
+    }
+
+    .arrow {
+      color: var(--teal);
+      font-size: 32px;
+      font-weight: 800;
+    }
+
+    .method-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 14px;
+      align-items: center;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-weight: 760;
+      text-align: center;
+      color: var(--charcoal);
+      background: #eef2f3;
+    }
+
+    .tag.red {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .tag.green {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .tag.teal {
+      color: var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .tag.amber {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .mini {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.28;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: 0.7fr 0.55fr 1.25fr 0.72fr 0.45fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .slot {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--white);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .slot strong {
+      display: block;
+      color: var(--teal);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .slot span {
+      display: block;
+      color: #333;
+      font-size: 15px;
+      line-height: 1.32;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      font-size: clamp(14px, 1.15vw, 18px);
+    }
+
+    th, td {
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    th {
+      background: #eef2f3;
+      color: var(--charcoal);
+    }
+
+    td.num, th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .bar-table .bar {
+      height: 12px;
+      border-radius: 6px;
+      background: #edf0f2;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .bar-table .fill {
+      height: 100%;
+      background: var(--teal);
+    }
+
+    .bar-table .fill.green {
+      background: var(--green);
+    }
+
+    .bar-table .fill.red {
+      background: var(--red);
+    }
+
+    .trellis {
+      display: grid;
+      gap: 14px;
+      padding: 12px 0;
+    }
+
+    .trellis-row {
+      display: grid;
+      grid-template-columns: 90px repeat(5, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .state {
+      border: 1px solid rgba(0, 124, 120, 0.45);
+      background: var(--teal-soft);
+      border-radius: 8px;
+      padding: 12px 8px;
+      text-align: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+    }
+
+    .state.dead {
+      color: var(--muted);
+      background: #eef2f3;
+      border-color: var(--line);
+    }
+
+    .callout {
+      border-left: 6px solid var(--teal);
+      background: var(--white);
+      border-radius: 8px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      font-size: clamp(17px, 1.5vw, 22px);
+      line-height: 1.36;
+    }
+
+    .callout.red {
+      border-left-color: var(--red);
+    }
+
+    .callout.green {
+      border-left-color: var(--green);
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .controls button {
+      border: 1px solid var(--line);
+      background: var(--white);
+      color: var(--charcoal);
+      border-radius: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+
+    .controls button:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+
+    .progress {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 5px;
+      background: rgba(0, 0, 0, 0.06);
+      z-index: 20;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--teal);
+      transition: width 160ms ease;
+    }
+
+    .slide-no {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #eef2f3;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 2px 5px;
+      white-space: nowrap;
+    }
+
+    .compact-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .num-dot {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-weight: 800;
+    }
+
+    .caption {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.32;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+
+      .deck {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      .slide {
+        position: relative;
+        min-height: 100vh;
+        padding: 22px;
+      }
+
+      .slide-header,
+      .footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .time {
+        text-align: left;
+      }
+
+      .cols,
+      .cols.wide-left,
+      .cols.wide-right,
+      .headline-grid,
+      .arrow-row,
+      .timeline {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+        justify-self: center;
+      }
+
+      .stack-row,
+      .trellis-row {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <section class="slide active" data-title="Title">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">ANLP Final Project Demo</p>
+          <h1>Grammar-Constrained Decoding for Diffusion LLMs</h1>
+          <p class="subtitle">From stochastic lookahead to deterministic frontier masking and Viterbi span repair.</p>
+        </div>
+        <div class="time"><strong>0:00-0:20</strong>Title</div>
+      </header>
+      <div class="content">
+        <div class="headline-grid">
+          <div class="metric">
+            <span class="value">99.2%</span>
+            <span class="label">schema validity on matched JSONSchemaBench medium instances</span>
+          </div>
+          <div class="metric">
+            <span class="value">1.06</span>
+            <span class="label">mean resamples after DPGrammar span repair</span>
+          </div>
+          <div class="metric">
+            <span class="value">0</span>
+            <span class="label">timeouts for Dgrammar and DPGrammar on the matched split</span>
+          </div>
+        </div>
+        <div class="callout">
+          Structured generation is easy to break under diffusion because the model edits many positions at once. The project asks how to keep JSON-schema validity without turning diffusion decoding into slow random trial-and-error.
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Use arrow keys, space, or buttons to navigate.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Motivation">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Motivation</p>
+          <h2>The parser wants a prefix. Diffusion gives holes.</h2>
+        </div>
+        <div class="time"><strong>0:20-0:50</strong>Problem</div>
+      </header>
+      <div class="content cols wide-left">
+        <div class="panel">
+          <h3>Diffusion denoising state</h3>
+          <div class="tokens" aria-label="Masked sequence">
+            <span class="tok">{</span>
+            <span class="tok">"method"</span>
+            <span class="tok">:</span>
+            <span class="tok mask">MASK</span>
+            <span class="tok">,</span>
+            <span class="tok">"expIds"</span>
+            <span class="tok">:</span>
+            <span class="tok mask">MASK</span>
+            <span class="tok">}</span>
+          </div>
+          <p class="caption">The model predicts multiple masked positions while seeing both left and right context.</p>
+          <div style="height:18px"></div>
+          <h3>Grammar checker expectation</h3>
+          <div class="tokens" aria-label="Complete prefix sequence">
+            <span class="tok">{</span>
+            <span class="tok">"method"</span>
+            <span class="tok">:</span>
+            <span class="tok good">"get"</span>
+            <span class="tok">,</span>
+            <span class="tok">"expIds"</span>
+            <span class="tok">:</span>
+            <span class="tok good">["1a...ef"]</span>
+            <span class="tok">}</span>
+          </div>
+          <p class="caption">A parser can advance cleanly only when the left-to-right prefix is concrete.</p>
+        </div>
+        <div class="panel">
+          <h3>Why it matters</h3>
+          <ul>
+            <li>JSON APIs, tool calls, code, and structured records reject malformed output.</li>
+            <li>Autoregressive constrained decoding assumes a stable left prefix.</li>
+            <li>Diffusion LLMs are attractive because they refine many tokens in parallel.</li>
+            <li>The open question is how to impose grammar constraints without throwing away that parallelism.</li>
+          </ul>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Core tension: bidirectional model proposals versus left-to-right grammar state.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Prior Work">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Prior Works</p>
+          <h2>Existing methods solve pieces, but hard schemas expose a gap.</h2>
+        </div>
+        <div class="time"><strong>0:50-1:15</strong>Context</div>
+      </header>
+      <div class="content">
+        <div class="arrow-row">
+          <div class="step">
+            <h3>AR constrained decoding</h3>
+            <p>Outlines, XGrammar, FSM-based decoding. Strong when tokens arrive left-to-right.</p>
+          </div>
+          <div class="arrow">-></div>
+          <div class="step">
+            <h3>Diffusion constrained decoding</h3>
+            <p>CD4dLLM and DINGO bring grammar ideas to masked diffusion models, often with higher checking cost.</p>
+          </div>
+          <div class="arrow">-></div>
+          <div class="step">
+            <h3>LAVE</h3>
+            <p>Lookahead-then-verify samples random suffixes. It works well on easier JSON tasks, but hard schemas make valid suffixes rare.</p>
+          </div>
+        </div>
+        <div class="callout red">
+          Missing piece: deterministic repair for multi-token joint constraints, such as an enum choice and a regex-constrained value that must become valid together.
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Prior work motivates the baseline: LAVE is strong, but stochastic validation can falsely reject valid paths.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Task">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Task And Dataset</p>
+          <h2>Generate valid JSON under complex schemas with the same diffusion budget.</h2>
+        </div>
+        <div class="time"><strong>1:15-1:45</strong>Task</div>
+      </header>
+      <div class="content cols">
+        <div class="panel">
+          <h3>Evaluation setup</h3>
+          <div class="compact-list">
+            <div class="item"><span class="num-dot">1</span><p><strong>Backbone:</strong> LLaDA-8B-Instruct, discrete diffusion language model.</p></div>
+            <div class="item"><span class="num-dot">2</span><p><strong>Dataset:</strong> JSONSchemaBench medium, matched <span class="code">n=511</span> llguidance-compatible instances.</p></div>
+            <div class="item"><span class="num-dot">3</span><p><strong>Budget:</strong> seed 0, <span class="code">T=128</span>, block length 32, generation length 256.</p></div>
+            <div class="item"><span class="num-dot">4</span><p><strong>Metric:</strong> schema validity first, then time, timeouts, and resamples.</p></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>What a hard instance looks like</h3>
+          <div class="tokens">
+            <span class="tok">{</span>
+            <span class="tok">"method"</span>
+            <span class="tok">:</span>
+            <span class="tok bad">"GET"</span>
+            <span class="tok">,</span>
+            <span class="tok">"expIds"</span>
+            <span class="tok">:</span>
+            <span class="tok bad">"grp_abc"</span>
+            <span class="tok">}</span>
+          </div>
+          <p class="caption">Schema wants lowercase method enum and a 24-character hex ID. Both errors must be repaired consistently.</p>
+          <table>
+            <tr><th>Schema feature</th><th>Failure mode</th></tr>
+            <tr><td>enum</td><td><span class="code">"GET"</span> is not <span class="code">"get"</span></td></tr>
+            <tr><td>pattern</td><td><span class="code">"grp_abc"</span> is not 24-char hex</td></tr>
+            <tr><td>nested structure</td><td>later choices depend on earlier fields</td></tr>
+          </table>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>75 schemas are excluded across all methods because llguidance cannot compile them.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Approach">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Approach Overview</p>
+          <h2>Two steps: deterministic frontier stack, then joint span repair.</h2>
+        </div>
+        <div class="time"><strong>1:45-2:25</strong>Methods</div>
+      </header>
+      <div class="content">
+        <div class="method-stack">
+          <div class="stack-row">
+            <span class="tag red">LAVE baseline</span>
+            <div>
+              <strong>Random lookahead verification.</strong>
+              <p class="mini">Sample K suffixes at the frontier. Accept a token only if at least one completion is valid.</p>
+            </div>
+          </div>
+          <div class="stack-row">
+            <span class="tag teal">Dgrammar</span>
+            <div>
+              <strong>Deterministic frontier masking and incremental parser state.</strong>
+              <p class="mini">Use llguidance to mask only the first unresolved token, commit adaptive batches, remask exact violators, and overlap CPU mask computation with GPU forward.</p>
+            </div>
+          </div>
+          <div class="stack-row">
+            <span class="tag green">DPGrammar</span>
+            <div>
+              <strong>Viterbi repair over the violated span.</strong>
+              <p class="mini">When greedy repair fails, solve a small grammar-state DP across the span instead of fixing one token at a time.</p>
+            </div>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="slot"><strong>Problem</strong><span>Diffusion has incomplete prefixes.</span></div>
+          <div class="slot"><strong>Prior</strong><span>LAVE samples completions.</span></div>
+          <div class="slot"><strong>Method</strong><span>Frontier masking + span DP.</span></div>
+          <div class="slot"><strong>Result</strong><span>99.2% validity.</span></div>
+          <div class="slot"><strong>Takeaway</strong><span>Joint repair matters.</span></div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>This matches the suggested video timeline: problem, task, approach, results, conclusion.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Dgrammar">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Method 1</p>
+          <h2>Dgrammar replaces stochastic validation with deterministic frontier control.</h2>
+        </div>
+        <div class="time"><strong>2:25-3:05</strong>Method</div>
+      </header>
+      <div class="content cols wide-right">
+        <div class="panel">
+          <h3>One denoising step</h3>
+          <div class="tokens">
+            <span class="tok">{</span>
+            <span class="tok frontier">MASK</span>
+            <span class="tok mask">MASK</span>
+            <span class="tok mask">MASK</span>
+            <span class="tok">}</span>
+          </div>
+          <p class="caption">Only the frontier token is grammar-masked.</p>
+          <div style="height:12px"></div>
+          <div class="tokens">
+            <span class="tok">{</span>
+            <span class="tok good">"count"</span>
+            <span class="tok good">:</span>
+            <span class="tok mask">MASK</span>
+            <span class="tok">}</span>
+          </div>
+          <p class="caption">After the prefix advances, the parser state is reused.</p>
+        </div>
+        <div class="panel">
+          <h3>Engineering choices</h3>
+          <div class="compact-list">
+            <div class="item"><span class="num-dot">A</span><p><strong>Frontier mask:</strong> compute valid next tokens from the current LLMatcher state.</p></div>
+            <div class="item"><span class="num-dot">B</span><p><strong>AIMD batching:</strong> grow commit size after success; reset after grammar conflict.</p></div>
+            <div class="item"><span class="num-dot">C</span><p><strong>Selective remask:</strong> remask only the first offending token, not the whole prefix.</p></div>
+            <div class="item"><span class="num-dot">D</span><p><strong>Async overlap:</strong> build the next mask on CPU while GPU forward runs.</p></div>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Dgrammar raises validity and removes timeouts, but greedy single-token repair still misses correlated errors.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="DPGrammar">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Method 2</p>
+          <h2>DPGrammar treats a violation span as one joint decision.</h2>
+        </div>
+        <div class="time"><strong>3:05-3:50</strong>Method</div>
+      </header>
+      <div class="content cols">
+        <div class="panel">
+          <h3>Greedy repair</h3>
+          <div class="tokens">
+            <span class="tok bad">t_c</span>
+            <span class="tok">...</span>
+            <span class="tok bad">t_s</span>
+          </div>
+          <p>Fixing <span class="code">t_c</span> may leave <span class="code">t_s</span> invalid. The decoder can bounce through repeated resampling.</p>
+          <div class="tokens">
+            <span class="tok good">t'_c</span>
+            <span class="tok">...</span>
+            <span class="tok bad">t_s</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Viterbi span repair</h3>
+          <div class="trellis" aria-label="DFA state trellis">
+            <div class="trellis-row">
+              <strong>Step 0</strong><span class="state">q0</span><span class="state dead">q1</span><span class="state dead">q2</span><span class="state dead">q3</span><span class="state dead">q4</span>
+            </div>
+            <div class="trellis-row">
+              <strong>Step 1</strong><span class="state dead">q0</span><span class="state">q1</span><span class="state">q2</span><span class="state dead">q3</span><span class="state dead">q4</span>
+            </div>
+            <div class="trellis-row">
+              <strong>Step k</strong><span class="state dead">q0</span><span class="state dead">q1</span><span class="state">q2</span><span class="state">q3</span><span class="state good">q*</span>
+            </div>
+          </div>
+          <p class="caption">DP state is a grammar automaton state. Paths that reach the same state are merged, keeping the highest log-probability path.</p>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Search objective: maximize token log probability subject to grammar feasibility across the whole span.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Case Study">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Representative Example</p>
+          <h2>One API config shows why random suffixes and greedy repair struggle.</h2>
+        </div>
+        <div class="time"><strong>3:50-4:25</strong>Example</div>
+      </header>
+      <div class="content">
+        <div class="arrow-row">
+          <div class="step">
+            <h3>Model proposal</h3>
+            <div class="tokens">
+              <span class="tok bad">"GET"</span>
+              <span class="tok">,</span>
+              <span class="tok bad">"grp_abc"</span>
+            </div>
+            <p class="caption">Enum case is wrong and ID pattern is wrong.</p>
+          </div>
+          <div class="arrow">-></div>
+          <div class="step">
+            <h3>Dgrammar</h3>
+            <div class="tokens">
+              <span class="tok good">"get"</span>
+              <span class="tok">,</span>
+              <span class="tok bad">"grp_abc"</span>
+            </div>
+            <p class="caption">Frontier mask fixes enum, but pattern violation remains.</p>
+          </div>
+          <div class="arrow">-></div>
+          <div class="step">
+            <h3>DPGrammar</h3>
+            <div class="tokens">
+              <span class="tok good">"get"</span>
+              <span class="tok">,</span>
+              <span class="tok good">"1a2b...ef"</span>
+            </div>
+            <p class="caption">Span DP repairs enum and 24-char hex jointly.</p>
+          </div>
+        </div>
+        <div class="headline-grid">
+          <div class="metric"><span class="value">120s</span><span class="label">LAVE timeout on this style of hard joint constraint</span></div>
+          <div class="metric"><span class="value">100</span><span class="label">Dgrammar resamples reported for the motivating o9875 case</span></div>
+          <div class="metric"><span class="value">7</span><span class="label">DPGrammar resamples reported for the same case</span></div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Message for the audience: a valid suffix may exist, but sampling is a bad way to find it.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Results">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Results</p>
+          <h2>DPGrammar gives near-perfect validity with far fewer resamples.</h2>
+        </div>
+        <div class="time"><strong>4:25-5:10</strong>Results</div>
+      </header>
+      <div class="content cols wide-left">
+        <div class="panel">
+          <h3>Main table</h3>
+          <table class="bar-table">
+            <tr><th>Metric</th><th class="num">LAVE</th><th class="num">Dgrammar</th><th class="num">DPGrammar</th></tr>
+            <tr>
+              <td>Validity</td>
+              <td class="num">77.5%<div class="bar"><div class="fill red" style="width:77.5%"></div></div></td>
+              <td class="num">84.9%<div class="bar"><div class="fill" style="width:84.9%"></div></div></td>
+              <td class="num">99.2%<div class="bar"><div class="fill green" style="width:99.2%"></div></div></td>
+            </tr>
+            <tr><td>Valid count</td><td class="num">396 / 511</td><td class="num">434 / 511</td><td class="num">507 / 511</td></tr>
+            <tr><td>Timeouts &gt;120s</td><td class="num">73</td><td class="num">0</td><td class="num">0</td></tr>
+            <tr><td>Mean resamples</td><td class="num">255.3</td><td class="num">32.43</td><td class="num">1.06</td></tr>
+            <tr><td>Mean time</td><td class="num">27.4s</td><td class="num">24.2s</td><td class="num">15.0s</td></tr>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Interpretation</h3>
+          <ul>
+            <li><strong>LAVE -> Dgrammar:</strong> removing random lookahead eliminates timeouts and improves validity.</li>
+            <li><strong>Dgrammar -> DPGrammar:</strong> joint span repair handles multi-token constraints that greedy remasking misses.</li>
+            <li><strong>Cost tradeoff:</strong> DP work is added only on violation spans, not across the whole sequence.</li>
+          </ul>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>All numbers are from matched jsb_medium instances, seed 0, T=128.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Discussion">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Discussion</p>
+          <h2>What worked, what did not, and where the method is sensitive.</h2>
+        </div>
+        <div class="time"><strong>5:10-5:40</strong>Discussion</div>
+      </header>
+      <div class="content cols">
+        <div class="panel">
+          <h3>What worked</h3>
+          <ul>
+            <li>Incremental parser state avoids repeated full-prefix checks.</li>
+            <li>Frontier masking keeps deterministic grammar guarantees local.</li>
+            <li>AIMD batching preserves some diffusion parallelism.</li>
+            <li>Viterbi repair finds consistent multi-token replacements.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Limitations</h3>
+          <ul>
+            <li>75 schemas are skipped because llguidance cannot compile them.</li>
+            <li>DPGrammar still misses 4 out of 511 matched instances.</li>
+            <li>Top-K DP can miss a valid path outside the candidate set.</li>
+            <li>Functional correctness beyond schema validity is not the focus here.</li>
+          </ul>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Design choice: solve the short violated span rather than running full-sequence DP every step.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Conclusion">
+      <header class="slide-header">
+        <div>
+          <p class="eyebrow">Conclusion</p>
+          <h2>The engineering layer gives the frontier; the DP layer gives the correction.</h2>
+        </div>
+        <div class="time"><strong>5:40-6:00</strong>Close</div>
+      </header>
+      <div class="content">
+        <div class="headline-grid">
+          <div class="metric">
+            <span class="value">1</span>
+            <span class="label">Identify the failure: stochastic suffix sampling breaks on hard joint constraints.</span>
+          </div>
+          <div class="metric">
+            <span class="value">2</span>
+            <span class="label">Build Dgrammar: deterministic frontier masking, AIMD batching, async overlap.</span>
+          </div>
+          <div class="metric">
+            <span class="value">3</span>
+            <span class="label">Add DPGrammar: Viterbi repair over violated spans for near-perfect validity.</span>
+          </div>
+        </div>
+        <div class="callout green">
+          Broader takeaway: structured diffusion generation needs both infrastructure for a reliable parser frontier and a principled repair mechanism when several tokens are wrong together.
+        </div>
+      </div>
+      <footer class="footer">
+        <span>End.</span>
+        <nav class="controls"><button data-prev>Prev</button><span class="slide-no"></span><button data-next>Next</button></nav>
+      </footer>
+    </section>
+  </main>
+  <div class="progress" aria-hidden="true"><span></span></div>
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const progress = document.querySelector(".progress span");
+    let index = 0;
+
+    function render() {
+      slides.forEach((slide, i) => {
+        slide.classList.toggle("active", i === index);
+        const no = slide.querySelector(".slide-no");
+        if (no) no.textContent = `${i + 1} / ${slides.length}`;
+      });
+      progress.style.width = `${((index + 1) / slides.length) * 100}%`;
+      document.title = `${slides[index].dataset.title} - DPGrammar Demo`;
+    }
+
+    function go(delta) {
+      index = Math.min(slides.length - 1, Math.max(0, index + delta));
+      render();
+    }
+
+    document.addEventListener("click", (event) => {
+      if (event.target.matches("[data-next]")) go(1);
+      if (event.target.matches("[data-prev]")) go(-1);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (["ArrowRight", " ", "PageDown"].includes(event.key)) {
+        event.preventDefault();
+        go(1);
+      }
+      if (["ArrowLeft", "PageUp"].includes(event.key)) {
+        event.preventDefault();
+        go(-1);
+      }
+      if (event.key === "Home") {
+        index = 0;
+        render();
+      }
+      if (event.key === "End") {
+        index = slides.length - 1;
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
