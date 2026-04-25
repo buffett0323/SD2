@@ -1,30 +1,64 @@
-# Grammar-Guided Beam Search (GGBS) for constrained diffusion
+# Dgrammar & DPGrammar: Constrained Decoding for Diffusion LLMs
 
-This repo implements **GGBS** — grammar-guided beam search on top of the Dgrammar / LAVE-style constrained diffusion stack — plus optional **SDSD** (sparse DINGO + herding + speculative tree) baselines for comparison.
+Constrained decoding for **discrete diffusion language models** (dLLMs), using **incremental JSON Schema** checking ([llguidance](https://github.com/microsoft/llguidance)), **deterministic frontier masking** (**Dgrammar**), and **Viterbi joint repair** over violated spans (**DPGrammar**, `dp_fix_prefix`). This repo accompanies the write-up in `[latex/latex/final.tex](latex/latex/final.tex)` (build with `pdflatex` in `latex/latex/`).
 
-**Focus:** JSON-schema constrained generation with **LLaDA-8B**, diffusion **T = 128**, same dataset and bench setup as `vendor/dgrammar`.
+**Code:** [https://github.com/buffett0323/anlp_final](https://github.com/buffett0323/anlp_final)
 
-## What GGBS does
+---
 
-GGBS replaces per-step sampling with a **segmented beam** over valid token prefixes: it uses the same `TokenChecker` / mask as LAVE, but organizes search as beam expansion with caching and optional suffix pruning. See `src/ggbs.py` and `vendor/dgrammar/bench/run_lave_ggbs.py`.
+## Poster
 
-## JSON-Bench timed results (jsonschema, seed 0, T 128)
+You can view the final project poster here:
 
-Aggregated from saved bench outputs (wall-clock `time_taken`, schema validity bit `valid`, and `timing.constraint_pct` as reported by each method):
-
-
-| Method   | n   | Syntactic | Functional | Mean Time (s) | Median (s) | P95 (s) | Max (s) | Constraint % (median) |
-| -------- | --- | --------- | ---------- | ------------- | ---------- | ------- | ------- | --------------------- |
-| **LAVE** | 250 | 98.40%    | —          | 25.22         | 14.39      | 60.7    | 663.3   | 61.34                 |
-| **GGBS** | 251 | 98.41%    | —          | 31.67         | 14.06      | 86.4    | 1728.0  | 12.28                 |
+[📄 Final Poster (PDF)](docs/Final_Poster.pdf)
 
 
-**Notes**
+---
 
-- **Sources:** `vendor/dgrammar/results/lave_timed_jsonschema_s0_t128.jsonl` (n = 250), `vendor/dgrammar/results/ggbs_lave_timed_jsonschema_s0_t128.jsonl` (n = 251). Instance sets are not identical; ordering follows each bench run independently.
-- **Syntactic:** fraction of rows with `valid: true` (schema check as produced by the bench).
-- **Functional:** not stored in these timed JSONL files; use `aggregate_unified_results.py` with `vendor/CD4dLLM` (ETH checker) if you need functional accuracy.
-- **Constraint %:** median of per-instance `timing.constraint_pct` (wall-time fraction attributed to constraint / mask work). LAVE's mean constraint % is 120.42% (heavily skewed by outliers with very short forward passes), so the median (61.34%) is reported. GGBS mean is 13.56%, median 12.28%.
+## Abstract
+
+LAVE-style **stochastic lookahead–verify** reports 99% validity on easy JSON benchmarks but **does not transfer** to harder schemas. On **JSONSchemaBench**-style `**jsb_medium`**, lookahead-verify reaches **78%** validity on matched instances, with **large lookahead draw counts** and **timeouts**. **Dgrammar** replaces random suffix sampling with **deterministic frontier masking**, AIMD batching, and async mask overlap (**84.9%** validity in Table 1, **no timeouts**). **DPGrammar** adds a **Viterbi DP** over violated spans, reaching **95.3%** validity with much lower resample churn (Table 1).
+
+---
+
+## Problem (one paragraph)
+
+**LAVE** accepts a frontier token only if ≥1 of *K* **random** full completions is grammar-valid. Under **joint** constraints (e.g. enum casing **and** a fixed-length hex pattern), valid random suffixes are astronomically rare → false rejections, many forwards per token, and **120 s** timeouts.
+
+**Dgrammar** enforces the schema only at the **first unresolved** position (`compute_mask` / `LLMatcher`), carries **incremental** automaton state, uses **AIMD** batch commits, **violator remask**, and **async** mask prep overlapping the GPU forward—**no** stochastic completions at the frontier.
+
+**DPGrammar** keeps the same denoising schedule; on reject, it runs `**dp_fix_prefix`**: Viterbi over the span [c,s) with **top-*K*** logits and grammar DFA states, then falls back to Dgrammar’s greedy remask if no feasible path exists.
+
+---
+
+## Main results — Table 1 (`jsb_medium`, matched n)
+
+All methods on the **same** **511** instances after **75** schemas are dropped (**llguidance** compile failures). **LLaDA-8B-Instruct**, **T=128** diffusion steps, block **32**, temperature **0.2** (details in the paper Appendix).
+
+
+|                               | LAVE      | Dgrammar  | DPGrammar     |
+| ----------------------------- | --------- | --------- | ------------- |
+| **Skipped (grammar-invalid)** | 75        | 75        | 75            |
+| **Evaluated (n)**             | 511       | 511       | 511           |
+| **Valid**                     | 397 / 511 | 434 / 511 | **487 / 511** |
+| **Validity**                  | 77.7%     | 84.9%     | **95.3%**     |
+| **Timeouts (>120 s)**         | 68        | 0         | 0             |
+| **Mean resamples†**           | 233.87    | 32.43     | **2.11**      |
+| **Mean wall time (s)**        | 41.12     | **13.38** | 16.14         |
+| **Median wall time (s)**      | 27.34     | **13.65** | 15.61         |
+| **P95 wall time (s)**         | 120.00    | **20.93** | 29.36         |
+| **Max wall time (s)**         | 120.05    | **33.45** | 88.17         |
+
+
+† **LAVE:** lookahead verification draws. **Dgrammar / DPGrammar:** token re-mask events (Table 1 footnote in `final.tex`).
+
+### Metrics
+
+- **Schema validity:** benchmark `valid` after extraction.  
+- **Wall time:** end-to-end driver time per instance.  
+- **Constraint / effective constraint %:** driver-reported grammar and mask share of wall time (see paper §Experimental design; cross-method comparison is nuanced—`[docs/experiment_comparison.md](docs/experiment_comparison.md)`).
+
+---
 
 ## Installation
 
@@ -34,69 +68,48 @@ uv python install 3.11
 uv pip install -r requirements.txt
 ```
 
-For LLaDA: `uv pip install -r requirements-llada.txt` (pinned `transformers`).
+For LLaDA: `uv pip install -r requirements-llada.txt`.
 
-**GGBS / LAVE bench (Dgrammar tree):** install `**llguidance>=1.6`** and put **dgrammar** on `PYTHONPATH`, e.g. clone into `vendor/dgrammar` (see below).
+**Bench stack:** `llguidance` ≥ 1.6, `vendor/dgrammar` on `PYTHONPATH`, plus constrained-diffusion / CD4dLLM-style layout per `[vendor/dgrammar/README.md](vendor/dgrammar/README.md)`.
 
-## Run GGBS vs LAVE (Dgrammar bench)
+---
 
-From `vendor/dgrammar` with `constrained_diffusion` on `PYTHONPATH` (see `vendor/dgrammar/README.md`):
+## Running benchmarks
+
+Scripts under `**vendor/dgrammar/bench/`** (and `**bench/**` at repo root) typically take:
+
+`seed  limit  dataset_name  diffusion_steps  offset  [instance_timeout_s]`
+
+Example (**LAVE**, `**jsb_medium`**, T{=}128, seed **0**):
 
 ```bash
 cd vendor/dgrammar
-# seed, limit, dataset, diffusion steps, offset
-python bench/run_lave_ggbs.py 0 272 jsonschema 128 0
-
-# for LAVE baseline
-python bench/run_lave_timed.py 0 272 jsonsch
+python bench/run_lave_timed.py 0 511 jsb_medium 128 0 120
 ```
 
-Timed LAVE-only runs use `bench/run_lave_timed.py` with the same argument pattern. Outputs are JSONL under `vendor/dgrammar/results/` (e.g. `ggbs_lave_timed_jsonschema_s0_t128.jsonl`, `lave_timed_jsonschema_s0_t128.jsonl`).
+**Dgrammar** / **DPGrammar:** use `run_dgrammar_timed.py`, `run_lave_improved_timed.py`, or Modal entrypoints under `bench/modal_*.py`. Merge shard JSONLs on `instance_id` as in **§Data**, `final.tex`.
 
-## Project layout (core)
+---
 
-```
-src/
-├── ggbs.py              # GGBS: segmented beam, caches, suffix prune
-├── diffusion_sdsd.py    # Diffusion + schema-guided + GGBS hooks
-├── baseline_dingo.py, sparse_dingo.py, herding.py, speculative_tree.py
-├── test_ggbs.py         # GGBS unit tests
-└── test_dllm_sdsd.py    # LLaDA / Dream loading and logits
-vendor/dgrammar/         # Dgrammar + LAVE + bench (run_lave_ggbs.py)
-```
-
-## Other scripts
+## Layout
 
 
-| Script                     | Purpose                                                 |
-| -------------------------- | ------------------------------------------------------- |
-| `run_ablation.py`          | B1/B2/B3/SDSD ablations on JSON-Mode-Eval (Dream/LLaDA) |
-| `run_unified_benchmark.py` | SDSD family vs Dgrammar metrics on JSON-Bench           |
-| `run_lave_sdsd_compare.py` | Aligned LAVE vs SDSD/BiDi comparison                    |
-| `debug_diffusion.py`       | One-instance Dgrammar vs SDSD sanity check (GPU)        |
+| Path                                             | Role                                            |
+| ------------------------------------------------ | ----------------------------------------------- |
+| `[latex/latex/final.tex](latex/latex/final.tex)` | Paper: motivation, method, Table 1, limitations |
+| `[vendor/dgrammar/](vendor/dgrammar/)`           | Implementation + benches + Modal                |
+| `[bench/](bench/)`                               | Mirror / helpers for bench scripts              |
+| `[docs/](docs/)`                                 | Extra notes                                     |
 
 
-## Tests
+---
 
-```bash
-cd src && python test_sdsd.py
-cd src && python test_ggbs.py
-cd src && python test_dllm_sdsd.py --mock
-```
+## References (paper)
 
-## Clone baselines
+LAVE (Zhang et al., ACM 2026); DINGO (Suresh et al., NeurIPS 2025); constrained diffusion / CD4dLLM; **llguidance** (Microsoft, 2025); STATIC (Su et al., 2026); **JSONSchemaBench** (Geng et al., 2025).
 
-```bash
-git clone https://github.com/guan404ming/dgrammar.git vendor/dgrammar
-git clone https://github.com/zhangyitonggg/CD4dLLM.git vendor/CD4dLLM   # ETH / functional eval
-git clone https://github.com/eth-sri/constrained-diffusion.git
-```
+---
 
-## References
+## Limitations
 
-- **LAVE** (Zhang et al., ACM 2026): Lookahead-then-Verify for diffusion CFG decoding  
-- **DINGO** (Suresh et al., NeurIPS 2025): Constrained inference for diffusion LLMs  
-- **Constrained Decoding** (Mündler et al., NeurIPS 2025 DL4C): CFG decoding for diffusion LLMs  
-- **STATIC** (Su et al., 2026): Sparse transition trie for constrained decoding
-
-Further detail: `docs/ablation.md`, `docs/lave_sdsd_compare.md`, `docs/experiment_comparison.md`.
+See **§Limitations** in `final.tex`: single split and backbone; validity ≠ semantic quality; DPGrammar **top-*K*** and `**find_constraint_end`** heuristic; fixed T, temperature, and timeout not fully tuned.

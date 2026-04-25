@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex acl_latex"] 1776634986.92657 "acl_latex.aux" "acl_latex.bbl" "acl_latex" 1776635194.05679 0
+["bibtex acl_latex"] 1777139570.51416 "acl_latex.aux" "acl_latex.bbl" "acl_latex" 1777139571.82479 0
   "./acl_natbib.bst" 1776450980 45186 3d1af46d62cc9172ef6e42b56c1cd613 ""
   "./custom.bib" 1776475666.8851 7240 45b9d8a6d9b3be2c644dce54335afdf4 ""
-  "acl_latex.aux" 1776635193.9364 16273 29c64971f22a48974a52c3a1c5ddece8 "pdflatex"
+  "acl_latex.aux" 1777139571.69916 16273 4e10ebea46b68c11fd68d2fdbc010774 "pdflatex"
   (generated)
   "acl_latex.bbl"
   "acl_latex.blg"
   (rewritten before read)
-["pdflatex"] 1776635192.82057 "/Users/buffettliu/Desktop/CMU/anlp/final/latex/latex/acl_latex.tex" "acl_latex.pdf" "acl_latex" 1776635194.05694 0
+["pdflatex"] 1777139570.55729 "/Users/buffettliu/Desktop/CMU/anlp/final/latex/latex/acl_latex.tex" "acl_latex.pdf" "acl_latex" 1777139571.82493 0
   "/Users/buffettliu/Desktop/CMU/anlp/final/latex/latex/acl_latex.tex" 1776621224.49327 3238 6b037743c004cea506c0800fb17b06ff ""
   "/Users/buffettliu/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/ec/ecit0800.450pk" 1776458740.94932 14476 11c0b11f3effe36f505d217b03f23e59 ""
   "/Users/buffettliu/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/ec/ecit0800.525pk" 1776458740.05183 16680 7ddb00468ae582de26611050466ce7a4 ""
@@ -235,12 +235,12 @@
   "/usr/local/texlive/2026basic/texmf-var/web2c/pdftex/pdflatex.fmt" 1776437640 2966192 32bafdd999fb368f0f42da632b0edce2 ""
   "/usr/local/texlive/2026basic/texmf.cnf" 1772405582 628 bbc09d6d38872d53c11bb48dc9b14e88 ""
   "acl.sty" 1776450980 11615 e2c027f483aa40e577ed34264c8b0655 ""
-  "acl_latex.aux" 1776635193.9364 16273 29c64971f22a48974a52c3a1c5ddece8 "pdflatex"
-  "acl_latex.bbl" 1776634986.94924 4981 efb045842c87339d0636b86d6f454657 "bibtex acl_latex"
-  "acl_latex.out" 1776635193.9377 3188 0672e5227a324ce7a90d0bd75b0cda73 "pdflatex"
+  "acl_latex.aux" 1777139571.69916 16273 4e10ebea46b68c11fd68d2fdbc010774 "pdflatex"
+  "acl_latex.bbl" 1777139570.55443 4981 efb045842c87339d0636b86d6f454657 "bibtex acl_latex"
+  "acl_latex.out" 1777139571.7004 3188 0672e5227a324ce7a90d0bd75b0cda73 "pdflatex"
   "acl_latex.tex" 1776621224.49327 3238 6b037743c004cea506c0800fb17b06ff ""
   "appendix.tex" 1776625637.83079 10794 ba4b5ecb78d519d16ea50b0ced6e3563 ""
-  "final.tex" 1776635192.4636 45048 c7e0f416403ebbe55b73aa2d254ec5a2 ""
+  "final.tex" 1777139568.6436 44915 479b9b64639ecd6f02e7c5e334063fe4 ""
   (generated)
   "acl_latex.aux"
   "acl_latex.log"
