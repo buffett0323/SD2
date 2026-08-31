@@ -1,0 +1,163 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{llada}
+\citation{dream}
+\citation{patil2025bfcl,geng2025jsonschemabenchrigorousbenchmarkstructured}
+\citation{outlines}
+\citation{dong2024xgrammar,guidance,zheng2024sglang,microsoft2025llguidance}
+\citation{sahoo2024simple,shi2024simplified}
+\citation{suresh2025dingoconstrainedinferencediffusion}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding,cd4dllm}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\citation{microsoft2025llguidance}
+\citation{geng2025jsonschemabenchrigorousbenchmarkstructured}
+\citation{nousresearch2024jsonmodeeval,ethsri2025jsonmodeevalextended}
+\citation{cd4dllm}
+\citation{outlines,dong2024xgrammar,microsoft2025llguidance}
+\citation{ugare2025syncode}
+\citation{park2025flexible}
+\citation{poesia2022synchromesh}
+\citation{muendler2025typeconstrained}
+\citation{cd4dllm}
+\citation{suresh2025dingoconstrainedinferencediffusion}
+\citation{dang2026fadllm}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\citation{li2026planverifyfillstructured}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Constrained decoding for AR LLMs.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Constrained decoding for dLLMs.}{2}{section*.2}\protected@file@percent }
+\citation{deng2021sequence}
+\citation{shao2022viterbi}
+\citation{chen2024controldag}
+\citation{sahoo2024simple,shi2024simplified}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Viterbi decoding for non-AR models.}{3}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Method}{3}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{3}{3}{Method}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Problem statement}{3}{subsection.3.1}\protected@file@percent }
+\newlabel{sec:problem}{{3.1}{3}{Problem statement}{subsection.3.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why this is challenging.}{3}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Repair as bounded search}{3}{subsection.3.2}\protected@file@percent }
+\def\@LN@column{1}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Joint repair of a violated span}}{4}{algorithm.1}\protected@file@percent }
+\newlabel{alg:dp}{{1}{4}{Joint repair by Viterbi over parser states}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Joint repair by Viterbi over parser states}{4}{subsection.3.3}\protected@file@percent }
+\newlabel{sec:dp}{{3.3}{4}{Joint repair by Viterbi over parser states}{subsection.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Candidates from the automaton}{4}{subsection.3.4}\protected@file@percent }
+\newlabel{sec:cand}{{3.4}{4}{Candidates from the automaton}{subsection.3.4}{}}
+\newlabel{eq:cand}{{1}{4}{Candidates from the automaton}{equation.1}{}}
+\citation{geng2025jsonschemabenchrigorousbenchmarkstructured}
+\citation{ethsri2025jsonmodeevalextended}
+\citation{nousresearch2024jsonmodeeval}
+\citation{llada}
+\citation{microsoft2025llguidance}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Termination as a grammar question}{5}{subsection.3.5}\protected@file@percent }
+\newlabel{sec:stop}{{3.5}{5}{Termination as a grammar question}{subsection.3.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6}System optimisations}{5}{subsection.3.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What the no-DP baseline is.}{5}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{5}{section.4}\protected@file@percent }
+\newlabel{sec:metric}{{4}{5}{Experiments}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Setup and metrics}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Datasets.}{5}{section*.6}\protected@file@percent }
+\citation{cd4dllm}
+\citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+\def\@LN@column{1}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc  {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc  {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). schema@1 validates against the instance's schema; content additionally requires five populated leaves; times are seconds and TO counts the $120$\,s cap. rs/inst is corrective work per instance, but its unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. DPG is DPGrammar.}}{6}{table.1}\protected@file@percent }
+\newlabel{tab:difficulty}{{1}{6}{The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). schema@1 validates against the instance's schema; content additionally requires five populated leaves; times are seconds and TO counts the $120$\,s cap. rs/inst is corrective work per instance, but its unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. DPG is DPGrammar}{table.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Models.}{6}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Baselines.}{6}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Metrics.}{6}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Main results}{6}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:results}{{4.2}{6}{Main results}{subsection.4.2}{}}
+\def\@LN@column{1}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces JSONSchemaBench \texttt  {medium} ($n{=}511$) as the content floor rises. Each row requires validity \emph  {and} at least $\kappa $ populated leaves.}}{7}{table.2}\protected@file@percent }
+\newlabel{tab:main}{{2}{7}{JSONSchemaBench \texttt {medium} ($n{=}511$) as the content floor rises. Each row requires validity \emph {and} at least $\kappa $ populated leaves}{table.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{The margin grows with difficulty.}{7}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{One class of violation the layer cannot repair.}{7}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Where correctness can be scored: JSON-Mode-Eval}{7}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:jme}{{4.3}{7}{Where correctness can be scored: JSON-Mode-Eval}{subsection.4.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces JSON-Mode-Eval, $n{=}272$, LLaDA-8B-Instruct. schema@1 is validity against the instance's schema, the same quantity as in Table~\ref {tab:difficulty}; functional@1 additionally requires the output to match the reference completion.}}{7}{table.3}\protected@file@percent }
+\newlabel{tab:jme}{{3}{7}{JSON-Mode-Eval, $n{=}272$, LLaDA-8B-Instruct. schema@1 is validity against the instance's schema, the same quantity as in Table~\ref {tab:difficulty}; functional@1 additionally requires the output to match the reference completion}{table.3}{}}
+\citation{shao2022viterbi,chen2024controldag}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Ablations: the objective does not matter, the search space does}{8}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:ablation}{{4.4}{8}{Ablations: the objective does not matter, the search space does}{subsection.4.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Ablation of the repair layer's components. The lower block lists knobs that measure to exactly zero.}}{8}{table.4}\protected@file@percent }
+\newlabel{tab:ablation}{{4}{8}{Ablation of the repair layer's components. The lower block lists knobs that measure to exactly zero}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusion}{8}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Limitations and future work}{8}{section.6}\protected@file@percent }
+\newlabel{sec:limits}{{6}{8}{Limitations and future work}{section.6}{}}
+\bibstyle{plainnat}
+\bibdata{custom}
+\bibcite{chen2024controldag}{{1}{2024}{{Chen et~al.}}{{Chen, Lin, Mei, and Byrne}}}
+\bibcite{dang2026fadllm}{{2}{2026}{{Dang and Ermon}}{{}}}
+\bibcite{deng2021sequence}{{3}{2021}{{Deng and Rush}}{{}}}
+\bibcite{dong2024xgrammar}{{4}{2024}{{Dong et~al.}}{{Dong, Ruan, Cai, Lai, Xu, Zhao, and Chen}}}
+\bibcite{ethsri2025jsonmodeevalextended}{{5}{2025}{{ETH SRI}}{{}}}
+\bibcite{geng2025jsonschemabenchrigorousbenchmarkstructured}{{6}{2025}{{Geng et~al.}}{{Geng, Cooper, Moskal, Jenkins, Berman, Ranchin, West, Horvitz, and Nori}}}
+\bibcite{guidance}{{7}{2023}{{Guidance AI}}{{}}}
+\bibcite{li2026planverifyfillstructured}{{8}{2026}{{Li et~al.}}{{Li, Jiang, Cheng, Fu, Cai, Huang, Ye, Chen, and Hentenryck}}}
+\bibcite{microsoft2025llguidance}{{9}{2025}{{Microsoft}}{{}}}
+\bibcite{muendler2025typeconstrained}{{10}{2025b}{{M{\"u}ndler et~al.}}{{M{\"u}ndler, He, Wang, Sen, Song, and Vechev}}}
+\bibcite{cd4dllm}{{11}{2025a}{{Mündler et~al.}}{{Mündler, Dekoninck, and Vechev}}}
+\bibcite{llada}{{12}{2025}{{Nie et~al.}}{{Nie, Zhu, You, Zhang, Ou, Hu, Zhou, Lin, Wen, and Li}}}
+\bibcite{nousresearch2024jsonmodeeval}{{13}{2024}{{Nous Research}}{{}}}
+\bibcite{park2025flexible}{{14}{2025}{{Park et~al.}}{{Park, Zhou, and D'Antoni}}}
+\bibcite{patil2025bfcl}{{15}{2025}{{Patil et~al.}}{{Patil, Mao, Yan, Ji, Suresh, Stoica, and Gonzalez}}}
+\bibcite{poesia2022synchromesh}{{16}{2022}{{Poesia et~al.}}{{Poesia, Polozov, Le, Tiwari, Soares, Meek, and Gulwani}}}
+\bibcite{sahoo2024simple}{{17}{2024}{{Sahoo et~al.}}{{Sahoo, Arriola, Schiff, Gokaslan, Marroquin, Chiu, Rush, and Kuleshov}}}
+\bibcite{shao2022viterbi}{{18}{2022}{{Shao et~al.}}{{Shao, Ma, and Feng}}}
+\def\@LN@column{1}
+\bibcite{shi2024simplified}{{19}{2024}{{Shi et~al.}}{{Shi, Han, Wang, Doucet, and Titsias}}}
+\bibcite{suresh2025dingoconstrainedinferencediffusion}{{20}{2025}{{Suresh et~al.}}{{Suresh, Banerjee, Ugare, Misailovic, and Singh}}}
+\bibcite{ugare2025syncode}{{21}{2025}{{Ugare et~al.}}{{Ugare, Suresh, Kang, Misailovic, and Singh}}}
+\bibcite{outlines}{{22}{2023}{{Willard and Louf}}{{}}}
+\bibcite{dream}{{23}{2025}{{Ye et~al.}}{{Ye, Xie, Zheng, Gao, Wu, Jiang, Li, and Kong}}}
+\bibcite{zhang2026lookaheadthenverifyreliableconstraineddecoding}{{24}{2026}{{Zhang et~al.}}{{Zhang, Li, Liu, Li, Jia, Li, and Li}}}
+\bibcite{zheng2024sglang}{{25}{2024}{{Zheng et~al.}}{{Zheng, Yin, Xie, Sun, Huang, Yu, Cao, Kozyrakis, Stoica, Gonzalez, Barrett, and Sheng}}}
+\def\@LN@column{1}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {A}The decoding pipeline}{11}{appendix.A}\protected@file@percent }
+\newlabel{app:pipeline}{{A}{11}{The decoding pipeline}{appendix.A}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Where the joint repair fires. Only a parser rejection reaches it, and only after a stop test and a bounded retry have failed, so a clean step pays nothing.}}{11}{figure.1}\protected@file@percent }
+\newlabel{fig:pipeline}{{1}{11}{Where the joint repair fires. Only a parser rejection reaches it, and only after a stop test and a bounded retry have failed, so a clean step pays nothing}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}The distribution of legal token sets}{11}{appendix.B}\protected@file@percent }
+\newlabel{app:legalsets}{{B}{11}{The distribution of legal token sets}{appendix.B}{}}
+\@writefile{toc}{\contentsline {paragraph}{Procedure.}{11}{section*.13}\protected@file@percent }
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{The distribution.}{12}{section*.14}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces How many tokens an incremental parser admits, over $6{,}657$ live states on JSONSchemaBench \texttt  {medium} ($|V|=126{,}349$). The distribution is bimodal and the decade between the modes is nearly empty, which is why no single $k$ suits both. Structural positions are uniformly tight; the bimodality lives inside strings, separating a partially spelled property name, which admits a handful of continuations, from a free-form value, which admits almost the whole vocabulary.}}{12}{figure.2}\protected@file@percent }
+\newlabel{fig:legalsets}{{2}{12}{How many tokens an incremental parser admits, over $6{,}657$ live states on JSONSchemaBench \texttt {medium} ($|V|=126{,}349$). The distribution is bimodal and the decade between the modes is nearly empty, which is why no single $k$ suits both. Structural positions are uniformly tight; the bimodality lives inside strings, separating a partially spelled property name, which admits a handful of continuations, from a free-form value, which admits almost the whole vocabulary}{figure.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{What the order of proposal and filter costs.}{12}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Where the two modes come from.}{12}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{When the automaton gives the complete candidate set.}{12}{section*.17}\protected@file@percent }
+\citation{microsoft2025llguidance}
+\citation{cd4dllm}
+\citation{microsoft2025llguidance}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {paragraph}{Two facts the method depends on.}{13}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {C}Ordering artifacts}{13}{appendix.C}\protected@file@percent }
+\newlabel{app:ordering}{{C}{13}{Ordering artifacts}{appendix.C}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}The parser interface}{13}{appendix.D}\protected@file@percent }
+\newlabel{app:api}{{D}{13}{The parser interface}{appendix.D}{}}
+\@writefile{toc}{\contentsline {paragraph}{Construction.}{13}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{The five operations.}{13}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Two details the method depends on.}{13}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {E}Grammar coverage and the CD-CFG comparison}{13}{appendix.E}\protected@file@percent }
+\newlabel{sec:coverage}{{E}{13}{Grammar coverage and the CD-CFG comparison}{appendix.E}{}}
+\def\@LN@column{1}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Grammar coverage is a property of the compiler, not of the decoder. Each arm inherits the schemas its toolchain accepts; validity is then measured only on the $351$ \texttt  {medium} schemas both toolchains compile, so the two effects are not confounded.}}{14}{table.5}\protected@file@percent }
+\newlabel{tab:coverage}{{5}{14}{Grammar coverage is a property of the compiler, not of the decoder. Each arm inherits the schemas its toolchain accepts; validity is then measured only on the $351$ \texttt {medium} schemas both toolchains compile, so the two effects are not confounded}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {F}Where the extra wall time goes}{14}{appendix.F}\protected@file@percent }
+\newlabel{app:workload}{{F}{14}{Where the extra wall time goes}{appendix.F}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Averages per instance on JSONSchemaBench \texttt  {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both.}}{14}{figure.3}\protected@file@percent }
+\newlabel{fig:workload}{{3}{14}{Averages per instance on JSONSchemaBench \texttt {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {G}Why validity alone is not enough}{14}{appendix.G}\protected@file@percent }
+\newlabel{app:example}{{G}{14}{Why validity alone is not enough}{appendix.G}{}}
+\def\@LN@column{1}
+\gdef \@abspage@last{15}

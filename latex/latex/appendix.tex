@@ -5,7 +5,7 @@
 
 Algorithm~\ref{alg:dpgrammar} gives the full pseudocode for the Viterbi segment repair used by DPGrammar.
 Given a violated span $[c,s)$ detected during generation, the algorithm maintains a dictionary of live DFA states, each mapped to its highest-scoring path (matcher clone and cumulative log-probability).
-At each position it probes the top-$K$ vocabulary entries via rollback—no cloning—and records the best (prev\_state, token) pair for each reachable DFA state (Viterbi merge).
+At each position it probes the top-$K$ vocabulary entries via rollback, no cloning, and records the best (prev\_state, token) pair for each reachable DFA state (Viterbi merge).
 After the loop, it clones one matcher per surviving state (Phase~2) and records the backtrack pointers.
 Backtracking from the best final state yields the minimal set of token replacements needed to make the span grammar-valid.
 
@@ -106,12 +106,12 @@ The output is complete and semantically coherent:
 \end{lstlisting}
 
 All enum constraints are satisfied (\texttt{htmode} $\in$ allowed set, \texttt{hwmode} $=$ \texttt{"11a"}), the channel is within range, and boolean/integer fields are correctly typed.
-Total wall time is 6.7\,s versus LAVE's 120\,s timeout—an 18$\times$ speedup on this instance.
+Total wall time is 6.7\,s versus LAVE's 120\,s timeout, an 18$\times$ speedup on this instance.
 
 \paragraph{Summary.}
 This instance illustrates the general failure mode of stochastic lookahead on enum-constrained fields: the probability of a random natural-language completion matching a specific technical string (e.g.\ \texttt{"VHT20"}) is effectively zero, so LAVE never commits.
 Frontier masking (shared by Dgrammar and DPGrammar) sidesteps this entirely by restricting the model's sampling distribution to the valid set at each position.
-On instances where frontier masking prevents all violations, DPGrammar's Viterbi repair is never invoked—the method degrades gracefully to pure frontier-masked generation at the speed of a single unconstrained diffusion pass.
+On instances where frontier masking prevents all violations, DPGrammar's Viterbi repair is never invoked, the method degrades gracefully to pure frontier-masked generation at the speed of a single unconstrained diffusion pass.
 
 \section{Case Study: Format-Constrained String Fields (\texttt{format: "uuid"})}
 \label{app:format}
@@ -141,7 +141,7 @@ Consider a \texttt{links} array whose items have a \texttt{type} string and a \t
 
 \paragraph{Observed outputs across methods.}
 
-\begin{table}[h]
+\begin{table*}[h]
 \centering\small
 \begin{tabular}{lllp{5.8cm}}
 \toprule
@@ -150,9 +150,9 @@ Consider a \texttt{links} array whose items have a \texttt{type} string and a \t
 Dgrammar
   & \texttt{"self"}
   & \texttt{"12000e1TestCase\allowbreak{}CanceledEvent"}
-  & \textbf{No} — \texttt{target} violates \texttt{format:\,"uuid"} \\[2pt]
+  & \textbf{No} — violates \texttt{format:\,"uuid"} \\[2pt]
 DPGrammar
-  & \texttt{"selfLink"},\;\texttt{"relatedLink"}
+  & \texttt{"relatedLink"}
   & \texttt{"123e4567-90ab-12cd-\allowbreak{}abef-123456789000"}
   & \textbf{Yes} — well-formed UUID \\[2pt]
 LAVE
@@ -163,17 +163,17 @@ LAVE
 \end{tabular}
 \caption{Representative outputs on a \texttt{jsb\_medium} instance with \texttt{format:\,"uuid"} on the \texttt{target} field.}
 \label{tab:uuid}
-\end{table}
+\end{table*}
 
 \paragraph{Dgrammar.}
 Frontier masking restricts each token to the automaton's valid set, but when the model generates a high-confidence non-UUID string (e.g.\ \texttt{"12000e1TestCaseCanceledEvent"}), each individual token may locally satisfy the grammar's prefix condition while the \emph{complete} string does not match the UUID pattern.
-Because Dgrammar's validity check only tests whether an \textsc{eos} token is present with no mask before it---it does not re-run a JSON Schema validator---the output is reported as \texttt{valid=True} even though \texttt{target} violates \texttt{format:\,"uuid"}.
+Because Dgrammar's validity check only tests whether an \textsc{eos} token is present with no mask before it, it does not re-run a JSON Schema validator, the output is reported as \texttt{valid=True} even though \texttt{target} violates \texttt{format:\,"uuid"}.
 The output appears semantically natural but is in fact schema-invalid.
 
 \paragraph{DPGrammar.}
 The Viterbi DP operates on spans $[c, c{+}s)$ and selects the token sequence of maximal log-probability that is accepted by the grammar automaton.
 For a UUID field, the automaton enforces the full hexadecimal-and-hyphen pattern, so the DP produces a well-formed UUID.
-The value \texttt{"123e4567-90ab-12cd-abef-123456789000"} is the model's highest-probability completion of the UUID pattern given the prompt context---a \emph{template UUID} that is grammatically correct but semantically generic.
+The value \texttt{"123e4567-90ab-12cd-abef-123456789000"} is the model's highest-probability completion of the UUID pattern given the prompt context, a \emph{template UUID} that is grammatically correct but semantically generic.
 DPGrammar's output is therefore schema-valid (unlike Dgrammar's) but less contextually specific than one might hope.
 
 \paragraph{LAVE.}
