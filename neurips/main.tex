@@ -30,7 +30,7 @@
 }
 
 % Renders in red so an unfilled number cannot reach a submitted PDF.
-\newcommand{\fixme}[1]{\textcolor{red}{\textbf{[FIXME: #1]}}}
+% \newcommand{\fixme}[1]{\textcolor{red}{\textbf{[FIXME: #1]}}}
 
 \begin{document}
 
@@ -85,11 +85,11 @@ the schedule free. We therefore repair after the fact, forgoing the certified
 guarantee. Existing repair, though, is myopic
 \citep{zhang2026lookaheadthenverifyreliableconstraineddecoding,cd4dllm}: it
 rewrites the position the parser rejected and leaves the rest of the region
-alone. That is not enough, because a grammar couples the positions it constrains.
-Whether a token leads anywhere depends on what must follow it, so a choice that
-is both locally probable and locally legal can still eliminate every valid
-completion of the region. The model gives no signal about this, its per-position
-distributions being independent where the grammar is not.
+alone. That is not enough, because whether a token leads anywhere depends on what must
+follow it: a choice that is both locally probable and locally legal can still
+eliminate every valid completion of the region. The model gives no signal about
+this, its per-position distributions being independent where the grammar is
+not.
 
 % method
 We introduce \textbf{DPGrammar}, a repair layer that treats a violated region as
@@ -98,10 +98,10 @@ parser rejects at the frontier, we identify the affected span and run a Viterbi
 search over a lattice of (parser state $\times$ position) pairs. Deciding an affected region jointly would be exponential in span length if searched over raw token sequences. However, because a path's future valid continuations are determined by its current parser state rather than its prefix, paths arriving at identical parser states can merge into a single search node, reducing the Viterbi pass to time linear in span length. We key states on the token set the parser admits, which merges more aggressively than that argument licenses; \S\ref{sec:dp} measures what the approximation costs. At each node, candidate tokens are drawn from the parser automaton's outgoing edges and ranked by model likelihood, which narrows the search while guaranteeing that no legal token is missed, so a tighter budget costs likelihood and never validity.\footnote{Against a vocabulary of $126{,}349$, a
 live parser state admits a median of just $106$ tokens (\S\ref{sec:cand},
 Appendix~\ref{app:legalsets}).} Termination is likewise read off the grammar
-rather than a step count. Because the layer fires only after a rejection it is
-agnostic to the unmasking schedule, and because it delegates parsing to an
-off-the-shelf incremental parser \citep{microsoft2025llguidance} it takes
-context-free constraints rather than only regular ones.
+rather than a step count; the layer places no requirement on the unmasking
+schedule, since it fires only after a rejection; and delegating the parse to an
+off-the-shelf incremental parser \citep{microsoft2025llguidance} makes the
+constraint context-free rather than regular.
 
 % results
 We evaluate on JSONSchemaBench \citep{geng2025jsonschemabenchrigorousbenchmarkstructured}
@@ -119,7 +119,7 @@ the other end of that axis.
 \section{Related Work}
 
 \paragraph{Constrained decoding for AR LLMs.}
-Constrained decoding for AR LLMs compiles grammars into incremental automata that mask invalid logits at each step \citep{outlines, dong2024xgrammar, microsoft2025llguidance}. \citet{geng2023grammar} give the framing we adopt, that a formal grammar describes the output space of structured NLP tasks in general rather than of serialisation formats alone, and \citet{tuccio2025grammarllm} carry it into open-ended generation over taxonomies and domain rules; our constraint is context-free for the same reason, although we evaluate on JSON Schema. Much recent work makes that mask cheap: SynCode \citep{ugare2025syncode} precomputes a token-lexeme store and \citet{park2025flexible} cut the offline preprocessing by an order of magnitude at equal online cost, while other extensions enforce semantic constraints \citep{poesia2022synchromesh} or type-system completability \citep{muendler2025typeconstrained}. All of it assumes monotonic left-to-right generation, so out-of-order commitment never arises, and that is the central problem in dLLMs.
+Constrained decoding for AR LLMs compiles grammars into incremental automata that mask invalid logits at each step \citep{outlines, dong2024xgrammar, microsoft2025llguidance}, with much recent work spent on making that mask cheap \citep{ugare2025syncode,park2025flexible} or on extending it to semantic \citep{poesia2022synchromesh} and type-system \citep{muendler2025typeconstrained} constraints. \citet{geng2023grammar} give the framing we adopt, that a formal grammar describes the output space of structured NLP tasks in general rather than of serialisation formats alone, and \citet{tuccio2025grammarllm} carry it into open-ended generation; our constraint is context-free for the same reason, although we evaluate on JSON Schema. All of it assumes monotonic left-to-right generation, so out-of-order commitment never arises, and that is the central problem in dLLMs.
 
 \paragraph{Constrained decoding for dLLMs.}
 \citet{cd4dllm} propose a CFG-constrained dLLM decoder, intersecting the
@@ -205,8 +205,8 @@ not ours. The depth test is the part that matters: without it the span can end
 inside an unclosed array or object, where the cheapest legal continuation is the
 closing bracket, and the joint solve then collapses the rest of the structure to
 \texttt{[]} or \texttt{\{\}}, the degeneracy \S\ref{sec:results} measures with
-the content floor. Appendix~\ref{app:budgets} reports which of the three binds in
-practice, and how long the resulting spans are.
+the content floor. Appendix~\ref{app:legalsets} reports which of the three binds
+in practice, and how long the resulting spans are.
 
 Over that span we seek the assignment $y$ maximising
 $\sum_{p}\log p_\theta(y_p\mid x)$ subject to the parser accepting
@@ -366,9 +366,8 @@ optimality is relative to the lattice: the pass returns the best assignment the
 candidate sets span, which is the best the grammar accepts exactly where those
 sets are complete, and where $|\mathcal{L}(q)|\le k$ the edge set is enumerated
 rather than sampled. Appendix~\ref{app:legalsets} gives the distribution of
-$|\mathcal{L}(q)|$ and how often it fits inside $k$; Appendix~\ref{app:budgets}
-sweeps $k$ and the span budget $L$. 
-% TODO: Appendix k vs. L sweeping
+$|\mathcal{L}(q)|$, how often it fits inside $k$, and where the span budget $L$
+binds. 
 \section{Experiments}
 \label{sec:metric}
 
@@ -386,10 +385,10 @@ completion; we use the $272$-instance extension
 release~\citep{nousresearch2024jsonmodeeval}, as released with CD-CFG.
 
 \paragraph{Models.}
-All arms run LLaDA-8B-Instruct~\citep{llada} with $T{=}128$ denoising steps,
-generation length $256$, block length $32$, and temperature $0.2$, on a single
-A100 per shard. Grammars are compiled by
+All arms run LLaDA-8B-Instruct~\citep{llada} with $T{=}128$ denoising steps and
+block length $32$, on a single A100 per shard, with grammars compiled by
 llguidance~\citep{microsoft2025llguidance} except where noted.
+Appendix~\ref{app:config} lists the remaining constants.
 
 \paragraph{Baselines.}
 \emph{Vanilla} is the same decoder with no constraint of any kind, and marks
@@ -519,6 +518,17 @@ where no-DP reaches none. Restricting each comparison to a shared
 population leaves the ordering unchanged, whether that population is the $351$
 schemas both toolchains compile or the $451$ instances LAVE finishes within the
 cap (Appendix~\ref{sec:coverage}).
+
+The content margin survives a change of schedule and grows where the schedule is
+harder: $+13.1$\,pp when the whole sequence is committed in one block rather than
+in blocks of $32$, and $+17.2$ when positions are revealed in random order rather
+than by confidence, against $+10.4$ here. The validity margin travels less
+evenly, from $+15.1$ under the first to $+0.4$ under the second, and what it
+tracks is the step budget rather than the search. Random order produces
+$2.3\times$ the violations, repairing them costs denoising steps, and $46\%$ of
+instances then exhaust the $128$-step schedule before the document closes, which
+is $98\%$ of what DPGrammar fails on there; the search itself dead-ends once in
+$733$ calls (Appendix~\ref{app:schedules}).
 
 Not every residual failure is a failure of the search. \textsc{llguidance} pins
 an object's properties to their declaration order, so a model that writes them in

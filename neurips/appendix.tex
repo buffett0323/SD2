@@ -1,24 +1,5 @@
 \appendix
 
-\section{The decoding pipeline}
-\label{app:pipeline}
-
-Figure~\ref{fig:pipeline} places the repair layer in the loop it runs inside.
-Every denoising step advances the parser over whatever prefix has become
-contiguous; a rejection routes through a termination test and a bounded
-single-token retry before the joint search is invoked, and every outcome except
-emission returns to the next step. The shaded box is the contribution of this
-paper; the rest is the frontier-constrained decoder it sits on.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.52\linewidth]{pipeline.pdf}
-\caption{Where the joint repair fires. Only a parser rejection reaches it, and
-only after a stop test and a bounded retry have failed, so a clean step pays
-nothing.}
-\label{fig:pipeline}
-\end{figure}
-
 \section{The distribution of legal token sets}
 \label{app:legalsets}
 
@@ -44,35 +25,41 @@ reproduced without a GPU.
 Figure~\ref{fig:legalsets} shows the result. The distribution is not merely
 skewed, it is bimodal: $38.4\%$ of states admit fewer than $100$ tokens
 and $29.7\%$ admit more than $10{,}000$, leaving the decade between $10^4$ and
-$10^5$ nearly empty. The median is $106$. The extremes are sharper still: before the first token
-a JSON object grammar admits $2$ of $126{,}349$ tokens, and after the two
-characters \texttt{\{\char34} it admits exactly one, the first character of
-the only property name the schema allows there.
+$10^5$ nearly empty. The median is $106$, and the extremes are sharper still: before its first token a
+JSON object grammar admits $2$ of $126{,}349$.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.86\linewidth]{legal_sets.pdf}
-\caption{How many tokens an incremental parser admits, over $6{,}657$ live
-states on JSONSchemaBench \texttt{medium} ($|V|=126{,}349$). The distribution is
-bimodal and the decade between the modes is nearly empty, which is why no single
-$k$ suits both. Structural positions are uniformly tight; the bimodality lives
-inside strings, separating a partially spelled property name, which admits a
-handful of continuations, from a free-form value, which admits almost the whole
-vocabulary.}
+\caption{How many tokens an incremental parser admits, over $6{,}657$ live states
+on JSONSchemaBench \texttt{medium} ($|V|=126{,}349$).}
 \label{fig:legalsets}
 \end{figure}
 
 \paragraph{What the order of proposal and filter costs.}
 The distribution above is why \S\ref{sec:cand} draws candidates from
-$\mathcal{L}(q)$ rather than ranking $V$ and filtering. On \texttt{medium} the
-admitted set is smaller than a top-$100$ draw at $38\%$ of live states, so a
-filter-then-propose scheme is sampling against a small target at those
-positions; conversely the set is smaller than $k$ at $40\%$ of state-positions,
-where the edge set is enumerated exactly rather than sampled and the search at
-that node is exhaustive rather than heuristic. Reversing the order in our own
-implementation costs $1.2$\,pp of schema@1 and produces four repair sites where
-the draw contained no token the parser would accept, a class the edge set cannot
-produce (\S\ref{sec:ablation}).
+$\mathcal{L}(q)$ rather than ranking $V$ and filtering: at the $38\%$ of live
+states admitting fewer than $100$ tokens, a top-$100$ draw is aiming at a small
+target. Reversing the order in our own
+implementation costs $1.2$\,pp of schema@1, and dead-ends the search at $93$ of
+its $399$ repair calls against $3$ of $315$ (\S\ref{sec:ablation}). Those $93$
+are the failure this ordering cannot design away: the draw held no token the
+parser would accept, so the search reported no path where one existed and handed
+the position back, $273$ positions in all.
+
+\paragraph{One site, both orders.}
+Instance \texttt{o65372} gives the failure in miniature. At position $17$ the
+model has written \texttt{",} and the parser refuses it: the schema is spelling
+out a mandated property name, and from that state it admits \emph{one} token of
+the $126{,}349$ in the vocabulary, the next character of that name. The model
+ranks the vocabulary without seeing the grammar, so its top-$100$ has no
+particular reason to contain that character, and here it does not. Filtering
+after sampling therefore leaves nothing: the candidate set is empty at the first
+layer, the DP dead-ends before it places anything, and position $17$ goes back to
+the sampler. Reading the edge set first leaves the same single token, which is
+all the search needs; from it the DP repairs a seven-position span in three
+edits. Nothing about the grammar, the model or the state differs between the two
+runs. Only the order in which they are consulted does.
 
 \paragraph{Where the two modes come from.}
 The obvious explanation, that the tight mode is structural punctuation and the
@@ -82,10 +69,13 @@ range of $95$ to $324$. The bimodality lives entirely inside strings ($3{,}228$
 states, p25 $=3$, median $=125{,}308$), where it separates two kinds of string:
 a free-form value admits almost the whole vocabulary, whereas a partially
 spelled property name admits a handful of continuations. Both modes matter for
-repair. The wide one is where filtering a top-$k$ draw is wasteful but harmless;
-the tight one is where it fails, and the tight one contains exactly the
-positions a diffusion decoder is most likely to get wrong: key boundaries,
-closings, and enumerated values.
+repair, and violations do not fall evenly across them. Of the $1{,}106$ the
+reported run records, $43.9\%$ occur at a state admitting fewer than $100$ tokens
+against $38.4\%$ of live states overall, and $22.4\%$ at one admitting more than
+$10{,}000$ against $29.7\%$: the tight mode is over-represented, though only
+modestly. Its tail is not modest. One violation in nine, $120$ of $1{,}106$,
+arises where the grammar admits a single token, and those are the states a
+top-$k$ draw over the vocabulary has no reason to hit.
 
 \paragraph{When the automaton gives the complete candidate set.}
 Where $|\mathcal{L}(q)| \le k$, Eq.~\ref{eq:cand} enumerates the edge set exactly rather
@@ -102,12 +92,30 @@ states with $|\mathcal{L}(q)| \le k$ & $16.4\%$ & $17.9\%$ & $18.1\%$ & $39.7\%$
 \end{tabular}
 \end{center}
 
-The jump between $k{=}64$ and $k{=}128$ is the tight mode itself, which clusters
-near $100$; this is why we set $k=100$ and why raising it further buys little.
-The fraction varies widely across schemas (at $k{=}32$: median $18.4\%$,
-interquartile range $9.8$--$28.3\%$, and $100\%$ for the most constrained schema
-in the sample), so it is a property of the schema, not a constant of the
-tokenizer.
+At the reported $k{=}100$ this holds at $39.7\%$ of live states. The tight mode
+clusters just above $100$, so $k{=}128$ reaches $54.0\%$ and $k{=}256$ only $0.6$
+beyond that: the mode is exhausted by $128$. Whether that extra coverage is worth
+anything is a question we can answer with the same replay used for the merge
+width. Solving each site twice, at $k{=}100$ and at $k{=}128$ and otherwise
+identically, the two returned the same assignment at every one of $320$ solves
+over $161$ states, and not because the budget was idle: $60\%$ of those states
+admit more than $100$ tokens and $31\%$ more than $128$. What makes $k$ a safe
+knob is in any case not its value but the order it is applied in, since a smaller
+$k$ costs likelihood and cannot cost validity (\S\ref{sec:cand}). The fraction varies widely across schemas (at $k{=}32$:
+median $18.4\%$, interquartile range $9.8$--$28.3\%$, and $100\%$ for the most
+constrained schema in the sample), so it is a property of the schema rather than
+a constant of the tokenizer.
+
+\paragraph{The span budget.}
+$L$ bounds the forward scan of \S\ref{sec:repair} rather than the candidate set.
+Over the $315$ repair sites of the reported run the scan ends at the first
+\textsc{mask} at $75.6\%$ of them and at a depth-zero junction at $9.8\%$, which
+leaves the budget itself binding at $7.9\%$; the remaining $6.7\%$ end where the
+probe can no longer advance. Spans run to $13.8$ positions on average and $9$ at
+the median. A smaller budget would bind more often, at $13.3\%$ of sites for
+$L{=}32$, $19.0\%$ for $24$, $31.7\%$ for $16$ and $52.4\%$ for $8$, so
+$L{=}48$ sits where that curve has flattened and a span it truncates is already
+an outlier.
 
 \paragraph{Two facts the method depends on.}
 First, no live state had an empty legal set ($0$ of $6{,}657$). This is what
@@ -132,9 +140,83 @@ properties in a different order therefore produces a violation that is not an
 error, and the correct repair, moving a block, is not expressible by a
 positional DP, which can only overwrite in place. The repair then writes the
 demanded key name over a value intended for another field. We measured this class
-at $7.6\%$ of $118$ violations; among the $16$ that occur where the grammar
-admits exactly one token, half are of this kind.
+at $6.6\%$ of the $1{,}106$ violations the reported \texttt{medium} run records
+across $276$ instances, and at $22\%$ of the $120$ that occur where the grammar
+admits exactly one token, where a positional DP has no alternative to write.
 
+
+\section{System optimisations}
+\label{app:sysopt}
+
+The repair layer sits on a frontier-constrained decoder, and the latencies we
+report depend on how that decoder avoids redundant work. Parser work is not
+repeated: one incremental parser is
+carried across denoising steps rather than re-parsing the prefix each time, and
+the search probes candidates by advancing and rolling back, so a parser is
+copied only for states that survive. Model work is not repeated either:
+resampling reuses the logits already in hand instead of a fresh forward pass,
+and committed tokens are batched: a clean step doubles the batch up to a cap of
+eight and any violation resets it to one, with the batch held at one until three
+quarters of the denoising steps have elapsed so that early positions each get a
+forward pass of context before they are fixed. Finally, mask construction
+for the next position overlaps the current forward pass, keeping the parser off
+the critical path.
+
+\section{Implementation and hyperparameters}
+\label{app:config}
+
+Every constant the decoder uses, in one place, so that the method is specified
+without reading it out of prose. Values are those of the reported runs.
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+ & symbol & value & where it acts \\
+\midrule
+\multicolumn{4}{l}{\emph{Backbone and schedule}}\\
+denoising steps          & $T$ & $128$ & \\
+generation length        &     & $256$ tokens & \\
+block length             &     & $32$ & semi-autoregressive blocks \\
+temperature              &     & $0.2$ & Gumbel noise on the logits \\
+remasking                &     & low-confidence & LLaDA's reference sampler \\
+seed                     &     & $0$ & one seed, see \S\ref{sec:limits} \\
+hardware                 &     & one A100-80GB per shard & \\
+\midrule
+\multicolumn{4}{l}{\emph{Repair layer}}\\
+candidate budget         & $k$ & $100$ & per lattice node (\S\ref{sec:cand}) \\
+span budget              & $L$ & $48$ positions & forward scan cap (\S\ref{sec:problem}) \\
+DP position cap          &     & $64$ & never binds while $L<64$ \\
+single-token retry depth &     & $10$ & ranked logits at $v$ (\S\ref{sec:problem}) \\
+window policy            &     & full span & one pass, not progressive widening \\
+merge key                & $\kappa$ & $\texttt{bytes}(\mathcal{L}(q))$ & \S\ref{sec:dp}, App.~\ref{app:api} \\
+paths kept per key       &     & $1$ & widening it changes nothing measured \\
+\midrule
+\multicolumn{4}{l}{\emph{Budgets and batching}}\\
+hand-backs per instance  &     & $100$ & a run that exceeds it is reported as is \\
+DP wall-clock per instance&    & $240$\,s & below the $120$\,s scoring cap \\
+commit batch cap         &     & $8$ tokens & \\
+commit batch growth      &     & $\times 2$ on a clean step & reset to $1$ on any violation \\
+batch growth gated until &     & $\tfrac{3}{4}T$ & early positions get a pass each \\
+\midrule
+\multicolumn{4}{l}{\emph{Parser}}\\
+library                  &     & \textsc{llguidance} 1.7.0 & App.~\ref{app:api} \\
+\texttt{max\_items\_in\_row} & & $20{,}000$ & default aborts on deep nesting \\
+\texttt{step\_max\_items}    & & $600{,}000$ & \\
+stop tokens              &     & \textsc{eos} $126081$, \textsc{eot} $126348$ & excluded from $\mathcal{C}$ \\
+mask token               &     & $126336$ & \\
+vocabulary               & $|V|$ & $126{,}349$ & from the checkpoint's tokenizer \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Two behaviours the table cannot carry.}
+First, a rejected single-token retry does not count against the hand-back
+budget: only a commit or a fall-through to the joint search does, so a violation
+whose repair sits below rank $10$ cannot exhaust the budget before the search is
+reached. Second, mask construction for the next position is issued
+asynchronously and joined after the current forward pass, and any state change
+at the frontier discards the pending mask rather than using a stale one.
 
 \section{The parser interface}
 \label{app:api}
@@ -151,10 +233,9 @@ the grammar and in the model agree exactly. A JSON Schema is compiled with
 \texttt{grammar\_from\_json\_schema} and a SMILES grammar with
 \texttt{grammar\_from\_lark}; compilation is checked before use, and a schema
 that fails to compile is excluded from every arm rather than scored as a failure
-for one (Table~\ref{tab:coverage} quantifies how many). We raise the default parser
-limits to \texttt{max\_items\_in\_row}${=}20{,}000$ and
-\texttt{step\_max\_items}${=}600{,}000$; at the defaults, deeply nested schemas
-abort mid-parse.
+for one (\S\ref{sec:metric} gives the counts). The parser limits are raised above
+their defaults, at which deeply nested schemas abort mid-parse
+(Appendix~\ref{app:config}).
 
 \paragraph{The five operations.}
 \begin{center}
@@ -179,27 +260,152 @@ $0$ there. It is therefore excluded from the candidate set of
 Eq.~\ref{eq:cand}: offering it wastes a slot, and where it is the only token the
 bias marks legal it would empty the set and imitate a dead end. A termination rule written in terms of consumption would therefore
 never fire, which is why \texttt{only\_stop\_remains} (\S\ref{sec:stop}) is
-defined on the bias---nothing but stop tokens remains legal---rather than on
-what the parser will consume. Second, the DP merges lattice paths on
-\texttt{bytes}(\texttt{compute\_logit\_bias()}) as the state key: two parser
-states that admit exactly the same tokens are indistinguishable to every
-subsequent decision, so collapsing them is exact rather than an approximation.
-The key is a value the implementation already computes to build the candidate
-set, so merging costs no additional parser calls.
+defined on the bias, meaning that nothing but stop tokens remains legal, rather
+than on what the parser will consume. Second, the DP merges lattice paths on
+\texttt{bytes}(\texttt{compute\_logit\_bias()}) as the state key. The key is a
+value the implementation already computes to build the candidate set, so merging
+costs no additional parser calls, but it identifies a state by what that state
+admits next rather than by the parser's configuration, and the two are not the
+same thing. An array with \texttt{"minItems": 5} gives the separating case, and it is easy to
+check. Feeding \texttt{\{"xs":[1}, \texttt{\{"xs":[1,2}, \texttt{\{"xs":[1,2,3}
+and \texttt{\{"xs":[1,2,3,4} to the parser leaves four states that owe four,
+three, two and one more element; all four return byte-identical masks, since all
+four must write a comma next and none may close the bracket. The mask separates
+them only once the obligation is discharged: after a fifth element it admits
+\texttt{]} and differs from all of them. Merging on $\kappa$ therefore collapses
+states that still differ, keeping one and discarding the rest.
+\S\ref{sec:dp} states what that collapse can and cannot cost.
+
+Collisions are rarer than the definition suggests, because the mask is over whole
+tokens of a byte-level BPE rather than over grammar symbols: a token spanning
+several bytes makes the mask reflect what the grammar permits several bytes
+ahead, so states whose futures diverge within that reach are already separated by
+their masks. A collision requires the divergence to lie beyond it, as it does
+above. The key can be refined at no cost, since conjoining
+\texttt{is\_accepting()} or the bracket depth the span-end scan already maintains
+separates states without an additional parser call, and we report the unrefined
+key because it is what produced the measurements below.
+
+\paragraph{How much the abstraction costs.}
+We measure it by widening the merge rather than by reasoning about it. The DP
+takes a width $B$: the best $B$ paths per key survive instead of the best one,
+so $B{=}1$ is the reported configuration and $B\to\infty$ is no merging at all.
+Widening strictly enlarges the searched set, so a width at which the answer stops
+moving is a width at which merging costs nothing. We replay the generated outputs
+of the \texttt{medium} run through the parser and, at every structural state
+reached, outside string literals and with a legal set under $4{,}000$, solve
+the same span twice, varying only $B$, with the model's ranking replaced by
+random score vectors so that the merge has to survive many orderings of the same
+candidate sets rather than one. Over $13{,}513$ solves at $4{,}529$ states of
+$447$ instances, $B{=}2$ changed the assignment at $0.19\%$ and $B{=}4$ at
+$0.33\%$, the second set containing the first; at every one of those the wider
+search scored strictly higher, by a median of $4.6$ nats and at most $21.2$. The
+merge therefore does discard a likelier path, on roughly one solve in three
+hundred. It discards a \emph{valid} path never, which is the property the layer
+depends on. Where the lattice is small enough to run with no merging at all
+($k{=}6$ over four positions, $7{,}836$ solves in which the path cap never
+bound), the merged search returned the lattice optimum every time, so what the
+key loses at $k{=}100$ is reachable only through candidate sets wider than a
+handful. For scale, the unmerged arm carried a median of $1{,}869$ live paths
+where $B{=}1$ carried $5$.
 
 
 
 
-\section{Grammar coverage and the CD-CFG comparison}
+\section{Prevention on the subset where prevention is available}
+\label{app:prevention}
+
+The introduction sets repair against prevention, and the published prevention
+methods are the ones we cannot run (\S\ref{sec:metric}). Running them would mean
+compiling each JSON Schema to a finite automaton first, which the recursive
+schemas in these splits do not admit at all and which, on the ones that do,
+would measure that translation as much as the decoding algorithm; their
+guarantee is therefore a property we report rather than a number we measure. So
+that the contrast is measured rather than asserted, we implement the prevention
+side ourselves, on the same backbone, the same prompts and the same schedule. At each
+denoising step it conditions the model's mean-field prediction on the whole
+constraint and decodes from the exact constrained posterior
+\[
+p(x^0 \mid x^t, G)\;\propto\;\Big(\textstyle\prod_i p_\theta(x^0_i \mid x^t)\Big)\cdot
+\mathbf{1}\!\left[x^0 \in \mathcal{L}(G)\right],
+\]
+which a finite automaton makes tractable: the automaton is a chain over
+positions, multiplying a chain by a fully factorised measure leaves a chain, and
+exact inference is then forward-backward. Violations cannot occur, so none of
+the repair machinery is reachable. We report both decoders, because the
+distinction matters here: \emph{viterbi} takes the mode of that posterior and
+\emph{marginal} takes per-position marginals.
+
+The constraint is compiled to an automaton under a nesting bound and an edge
+budget of $20$ million, which is where a recursive schema is lost, and the arms
+are scored on $101$ instances rather than on the full split because an A100
+minute buys about one instance here. Table~\ref{tab:prevention} reports what the
+guarantee costs.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Prevention against repair on the first $128$ instances of
+JSONSchemaBench \texttt{medium} in identifier order, less $27$ on which
+automaton construction exhausted a $32$\,GiB container before any decoder ran,
+leaving $101$; same backbone, prompts and schedule throughout. Rates are over all
+$101$, so a schema an arm's toolchain cannot accept counts against it: the
+guarantee the prevention arms carry is over the documents they produce, not over
+the workload. Constraint time is each arm's own instrumentation and the two
+harnesses measure it differently, so it is compared as an order of magnitude
+rather than as a ratio.}
+\label{tab:prevention}
+\begin{tabular}{lrrrrr}
+\toprule
+Method & constraint built & schema@1\,$\uparrow$ & content\,$\uparrow$ & median leaves\,$\uparrow$ & mean\,s\,$\downarrow$ \\
+\midrule
+FA, marginal (mass) & $66$ ($65.3\%$) & $59.4$ & $8.9$  & $1$  & $77.5$ \\
+FA, viterbi (mode)  & $67$ ($66.3\%$) & $58.4$ & $18.8$ & $1$  & $57.5$ \\
+no-DP (ours)        & $92$ ($91.1\%$) & $83.2$ & $67.3$ & $13$ & $\mathbf{13.4}$ \\
+\textbf{DPGrammar}  & $92$ ($91.1\%$) & $\mathbf{85.1}$ & $\mathbf{73.3}$ & $\mathbf{13}$ & $16.8$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Prevention pays on all three axes at once. It reaches a third fewer schemas: an
+automaton is built for $66\%$ of the sample against the incremental parser's
+$91\%$. The gap is not a tuning choice but the size of the object being asked
+for. Of the $34$ schemas the construction does not deliver, $16$ exceed the edge
+budget, at a median of $61.7$ million edges and one schema at $2.0$ billion
+against a budget of $20$ million, and $16$ fail construction outright; the
+remaining two decode to nothing usable. The recursion a JSON Schema expresses in
+a line is what a finite automaton has to pay for in states, and on a third of
+this workload it cannot. It is
+slower by a factor of three to five, and where the repair layer's constraint
+machinery is under a second of a $16.8$\,s instance, the prevention arms spend
+$90.5\%$ and $92.4\%$ of wall clock inside inference over the automaton. And on
+the documents it does produce it is degenerate: the median prevention output
+carries a single scalar leaf against DPGrammar's thirteen, and only $8.9\%$ of
+the mass decoder's and $18.8\%$ of the mode decoder's outputs clear the
+five-leaf floor against $73.3\%$ of ours. This is the failure the floor was
+introduced to see (\S\ref{sec:metric}): the smallest document a schema admits is
+both valid and cheap, so a decoder that optimises probability under a hard
+constraint is drawn to it, and closing a structure costs one token where content
+pays entropy at every position.
+
+One number here is worth reading against the guarantee rather than past it.
+Validity is $58$--$59\%$ over the sample and $88$--$91\%$ over the instances the
+prevention arms actually run, not $100\%$. The constraint is enforced on every
+prefix, so nothing invalid is ever \emph{sampled}; what the guarantee does not
+cover is running out of generation length before the document closes, which
+leaves a prefix that is in the automaton's language and not in the schema's.
+Prevention removes the violations a decoder commits. It does not remove the ones
+a budget imposes.
+
+\section{Comparing on shared populations}
 \label{sec:coverage}
 
 \begin{table}[t]
 \centering
 \small
 \caption{Grammar coverage is a property of the compiler, not of the decoder.
-Each arm inherits the schemas its toolchain accepts; validity is then measured
-only on the $351$ \texttt{medium} schemas both toolchains compile, so the two
-effects are not confounded.}
+Validity is measured only where both toolchains compile, so the two effects are
+not confounded.}
 \label{tab:coverage}
 \begin{tabular}{llcc}
 \toprule
@@ -214,24 +420,82 @@ No-DP baseline     & \textsc{llguidance}   & $511/586$ ($87.2\%$) & $92.6\%$ \\
 \end{table}
 
 CD-CFG~\citep{cd4dllm} is run from the authors' released code, which builds its
-constraint with \textsc{rustformlang}, the formal-language library distributed
-in the same repository, rather than with
-\textsc{llguidance}~\citep{microsoft2025llguidance}. The two
-accept different schemas: $351$ compile under both, $160$ only under
-\textsc{llguidance}, $32$ only under \textsc{rustformlang}, with
-\textsc{rustformlang} rejecting $203$ of $586$ mostly over regular-expression
-quantifiers that Python's \texttt{re} accepts.
+constraint with \textsc{rustformlang}, the formal-language library shipped in the
+same repository, rather than with
+\textsc{llguidance}~\citep{microsoft2025llguidance}. Counting the schemas that
+front-end rejects as decoding failures would measure a regex parser rather than a
+decoding algorithm, so Table~\ref{tab:coverage} reports coverage separately and
+scores validity only on the $351$ \texttt{medium} schemas both toolchains
+compile. Coverage differs widely: \textsc{rustformlang} rejects $203$ of $586$,
+mostly over regular-expression quantifiers that Python's \texttt{re} accepts,
+where \textsc{llguidance} accepts $511$.
 
-Counting those $203$ as decoding failures would measure a regex front-end
-rather than a decoding algorithm, so we report coverage separately and compare
-decoding only on the shared $351$. There CD-CFG reaches $45.0\%$ validity with
-$19$ timeouts against DPGrammar's $97.4\%$ with none, and the ordering of the
-arms is unchanged from Table~\ref{tab:difficulty}. Every absolute value rises on
-this subset, DPGrammar's from $96.7\%$ to $97.4\%$ and the no-DP baseline's from
-$91.8\%$ to $92.6\%$, so the $160$ schemas only \textsc{llguidance} compiles are
-the harder ones rather than the easier: restricting to what both front-ends
-accept makes the task easier for every decoder, not just for CD-CFG.
+On the shared $351$, CD-CFG reaches $45.0\%$ with $19$ timeouts against
+DPGrammar's $97.4\%$ with none, and every arm scores higher there than on its own
+full set, so the $160$ schemas only \textsc{llguidance} compiles are the harder
+ones. That CD-CFG also falls below the unconstrained decoder at every tier of
+Table~\ref{tab:difficulty} is this coverage gap rather than its decoding. LAVE
+needs the same treatment for a different reason: it runs on the same $511$ we do
+but reaches the cap on $60$, and judging it only where it finishes raises it from
+$78.3\%$ to $88.7\%$ against our $97.3\%$ on that same $451$. Neither adjustment
+changes the ordering.
 
+\section{Other decoding schedules}
+\label{app:schedules}
+
+The repair layer fires only after a parser rejection, so it places no
+requirement on the order in which positions are revealed. That is a claim about
+applicability, and Table~\ref{tab:schedules} separates it from a claim about the
+size of the gain. Both arms are rerun end to end under each schedule, so every
+row is an internally controlled comparison.
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{The same two arms under three decoding schedules, on the $511$
+\texttt{medium} instances \textsc{llguidance} compiles. \emph{sched.\ end} is the
+share of instances whose generation stopped because the $T{=}128$ denoising
+schedule ran out rather than because the grammar permitted an end.}
+\label{tab:schedules}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Schedule & Arm & schema@1 & content & rs/inst & violations & DP dead ends & sched.\ end \\
+\midrule
+\multirow{2}{*}{low-confidence, block $32$}
+ & no-DP & $91.8$ & $74.6$ & $33.2$ & --- & --- & --- \\
+ & DPG   & $\mathbf{96.7}$ & $\mathbf{84.9}$ & $1.2$ & $1{,}106$ & $3/315$ & $31\%$ \\
+\midrule
+\multirow{2}{*}{random unmasking order}
+ & no-DP & $91.6$ & $59.1$ & $63.3$ & --- & --- & --- \\
+ & DPG   & $\mathbf{92.0}$ & $\mathbf{76.3}$ & $3.1$ & $2{,}576$ & $1/733$ & $46\%$ \\
+\midrule
+\multirow{2}{*}{full parallel, block $256$}
+ & no-DP & $77.3$ & $63.8$ & $30.0$ & --- & --- & --- \\
+ & DPG   & $\mathbf{92.4}$ & $\mathbf{76.9}$ & $1.0$ & $872$ & $0/320$ & $39\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Committing the whole sequence in one block rather than in blocks of $32$ puts
+more of it beyond the frontier before the parser reads it, and the validity
+margin widens from $+4.9$ to $+15.1$\,pp: the unrepaired baseline falls to
+$77.3\%$ while the repaired arm holds $92.4\%$. This is the difficulty gradient
+of Table~\ref{tab:difficulty} arriving along a second axis.
+
+Random order costs both arms, and for a reason the table makes visible. It
+produces $2.3\times$ the violations of the reported schedule, each of which costs
+denoising steps to repair, so $46\%$ of instances exhaust the $128$-step schedule
+before the document closes against $31\%$ here. Those truncations are $98\%$ of
+what DPGrammar fails on under that schedule. The search itself does not fail:
+it dead-ends once in $733$ calls, against three in $315$ under the reported
+schedule. What the fixed step budget costs is validity, not repair.
+
+The content margin survives every schedule and is largest where the schedule is
+hardest, at $+17.2$ and $+13.1$\,pp against $+10.4$ in the reported
+configuration. The validity margin does not: it ranges from $+0.4$ to $+15.1$,
+tracking how much schedule is left once repair has been paid for. Raising $T$ is
+the obvious remedy and one we do not test here.
 
 \section{Where the extra wall time goes}
 \label{app:workload}
