@@ -1,25 +1,30 @@
-papers/
-.DS_Store
-.claude/
+# Files kept on disk but out of the repo.  Anything here was superseded by a
+# later run or a later write-up; nothing the paper reports depends on it.
 not_used/
-__pycache__/
-*/__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyw
-*.pyz
-*.pywz
-*.pyzw
-*.pyzwz
-*.pyzwzw
 
-.env
+# Vendored upstream checkouts (see README: Setup)
+vendor/
 constrained-diffusion/
 
-# Cloned repositories
-vendor/static-constraint-decoding/
-vendor/constrained-diffusion/
-vendor/dgrammar/
-vendor/CD4dLLM/
-vendor/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# LaTeX build products.  main.pdf and main.bbl are tracked on purpose: the
+# submission needs the .bbl and reviewers want the .pdf.
+neurips/*.aux
+neurips/*.log
+neurips/*.out
+neurips/*.fls
+neurips/*.fdb_latexmk
+neurips/*.synctex.gz
+neurips/*.blg
+
+# macOS
+.DS_Store
+
+# Scratch
+papers/
+.claude/
