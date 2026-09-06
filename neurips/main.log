@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.8.28)  4 SEP 2026 13:35
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.8.28)  5 SEP 2026 18:08
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -732,21 +732,23 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `phv' (encoding: T1).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
-
-Underfull \vbox (badness 3514) has occurred while \output is active []
-
  [1
 
 
 {/usr/local/texlive/2026/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/base/8r.enc}{/usr/local/texlive/2026/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc}] [2] [3]
-Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on input line 308.
- [4
+Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on input line 307.
+
+Underfull \hbox (badness 1460) in paragraph at lines 330--331
+[] $\OML/cmm/m/it/10 S \OMS/cmsy/m/n/10   f \OML/cmm/m/it/10 ^^T[] \OMS/cmsy/m/n/10 7! \OT1/cmr/m/n/10 ([](\OML/cmm/m/it/10 q\OT1/cmr/m/n/10 )[]\OML/cmm/m/it/10 t;  s[]\OT1/cmr/m/n/10 ) \OMS/cmsy/m/n/10 g$ \T1/ptm/m/n/10 (+20) and $\OML/cmm/m/it/10 B\OT1/cmr/m/n/10 [\OML/cmm/m/it/10 p; ^^T[]\OT1/cmr/m/n/10 ] \OMS/cmsy/m/n/10   \OT1/cmr/m/n/10 (\OML/cmm/m/it/10 ^^T; t\OT1/cmr/m/n/10 )$\T1/ptm/m/n/10 (+20) , for each
+ []
+
+[4
 pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.371 \section
+l.370 \section
               {Experiments}] [5]
-Overfull \hbox (8.9664pt too wide) in paragraph at lines 441--467
+Overfull \hbox (8.9664pt too wide) in paragraph at lines 442--468
  [][] 
  []
 
@@ -754,22 +756,22 @@ Overfull \hbox (8.9664pt too wide) in paragraph at lines 441--467
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.506 
+l.509 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.506 
+l.509 
       ] [7
 pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.582 
-      ] [8
+l.576 ...c is the search space, not the objective}
+                                                  ] [8
 pdfTeX warning (ext4): destination with the same identifier (name{table.4}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.663 \clearpage
+l.655 \clearpage
                 ] (./main.bbl
 Underfull \hbox (badness 3439) in paragraph at lines 36--41
 []\T1/ptm/m/n/10 (+20) ETH SRI.  json-mode-eval-extended.  Hug-ging Face dataset, 2025.  URL []$\T1/cmtt/m/n/10 https :
@@ -783,7 +785,7 @@ Underfull \hbox (badness 10000) in paragraph at lines 36--41
 [9
 
 ]) [10] (./appendix.tex
-<legal_sets.pdf, id=394, 390.25798pt x 180.675pt>
+<legal_sets.pdf, id=406, 390.25798pt x 180.675pt>
 File: legal_sets.pdf Graphic file (type pdf)
 <use legal_sets.pdf>
 Package pdftex.def Info: legal_sets.pdf  used on input line 33.
@@ -812,53 +814,59 @@ Underfull \vbox (badness 10000) has occurred while \output is active []
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [13] [14] [15
+ [13] [14] [15] [16
 pdfTeX warning (ext4): destination with the same identifier (name{table.5}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.399 
-      ] [16
+l.497 
+      ]
+Underfull \vbox (badness 7047) has occurred while \output is active []
+
+
+Underfull \vbox (badness 7047) has occurred while \output is active []
+
+ [17
 pdfTeX warning (ext4): destination with the same identifier (name{table.6}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.493 
+l.562 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.7}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.493 
+l.562 
       ]
-<workload.pdf, id=508, 679.33798pt x 169.8345pt>
+<workload.pdf, id=534, 679.33798pt x 169.8345pt>
 File: workload.pdf Graphic file (type pdf)
 <use workload.pdf>
-Package pdftex.def Info: workload.pdf  used on input line 510.
+Package pdftex.def Info: workload.pdf  used on input line 565.
 (pdftex.def)             Requested size: 397.48499pt x 99.37221pt.
- [17
+) [18
 pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.571 \end{center}
-                   <./workload.pdf>]) [18] (./main.aux)
+l.662 \end{document}
+                     <./workload.pdf>] (./main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: FA3CE44A2B8EAE62B9861E088EF24A41;4534.
+(rerunfilecheck)             Checksum: EF2B385237610380069A6B642A15B161;4718.
  ) 
 Here is how much of TeX's memory you used:
- 25676 strings out of 467525
- 468453 string characters out of 5418982
- 917587 words of memory out of 5000000
- 53636 multiletter control sequences out of 15000+600000
- 718405 words of font info for 362 fonts, out of 8000000 for 9000
+ 25685 strings out of 467525
+ 468555 string characters out of 5418982
+ 917607 words of memory out of 5000000
+ 53638 multiletter control sequences out of 15000+600000
+ 718413 words of font info for 363 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  84i,11n,94p,1052b,876s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftc1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt0800.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt0900.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/public/cm-super/sftt1000.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2026/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (18 pages, 468016 bytes).
+Output written on main.pdf (18 pages, 474019 bytes).
 PDF statistics:
- 695 PDF objects out of 1000 (max. 8388607)
- 543 compressed objects within 6 object streams
- 110 named destinations out of 1000 (max. 500000)
- 83671 words of extra memory for PDF output out of 89155 (max. 10000000)
+ 717 PDF objects out of 1000 (max. 8388607)
+ 564 compressed objects within 6 object streams
+ 116 named destinations out of 1000 (max. 500000)
+ 83679 words of extra memory for PDF output out of 89155 (max. 10000000)
 

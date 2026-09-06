@@ -28,13 +28,13 @@
 \citation{zhang2026lookaheadthenverifyreliableconstraineddecoding}
 \citation{nakshatri2025speculative}
 \citation{li2026planverifyfillstructured}
+\citation{deng2021sequence}
+\citation{shao2022viterbi}
+\citation{chen2024controldag}
 \def\@LN@column{1}
 \@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Constrained decoding for AR LLMs.}{2}{section*.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Constrained decoding for dLLMs.}{2}{section*.2}\protected@file@percent }
-\citation{deng2021sequence}
-\citation{shao2022viterbi}
-\citation{chen2024controldag}
 \citation{sahoo2024simple,shi2024simplified}
 \def\@LN@column{1}
 \@writefile{toc}{\contentsline {paragraph}{Viterbi decoding for non-AR models.}{3}{section*.3}\protected@file@percent }
@@ -45,10 +45,10 @@
 \@writefile{toc}{\contentsline {paragraph}{Why this is challenging.}{3}{section*.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Repair as bounded search}{3}{subsection.3.2}\protected@file@percent }
 \newlabel{sec:repair}{{3.2}{3}{Repair as bounded search}{subsection.3.2}{}}
+\newlabel{sec:stop}{{3.2}{3}{Repair as bounded search}{subsection.3.2}{}}
 \def\@LN@column{1}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Where the joint repair fires. The row is tried left to right and each stage is reached only when the one before it did not settle the position; every outcome but emission returns to the next denoising step. The shaded box is this paper.}}{4}{figure.1}\protected@file@percent }
 \newlabel{fig:pipeline}{{1}{4}{Where the joint repair fires. The row is tried left to right and each stage is reached only when the one before it did not settle the position; every outcome but emission returns to the next denoising step. The shaded box is this paper}{figure.1}{}}
-\newlabel{sec:stop}{{3.2}{4}{Repair as bounded search}{subsection.3.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Joint repair by Viterbi over parser states}{4}{subsection.3.3}\protected@file@percent }
 \newlabel{sec:dp}{{3.3}{4}{Joint repair by Viterbi over parser states}{subsection.3.3}{}}
 \@writefile{toc}{\contentsline {paragraph}{What merging costs.}{4}{section*.5}\protected@file@percent }
@@ -74,8 +74,8 @@
 \@writefile{toc}{\contentsline {paragraph}{Models.}{5}{section*.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Baselines.}{5}{section*.8}\protected@file@percent }
 \def\@LN@column{1}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc  {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc  {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). Times are in seconds and TO counts the $120$\,s cap. rs/inst is corrective work per instance, whose unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. DPG is DPGrammar.}}{6}{table.1}\protected@file@percent }
-\newlabel{tab:difficulty}{{1}{6}{The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). Times are in seconds and TO counts the $120$\,s cap. rs/inst is corrective work per instance, whose unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. DPG is DPGrammar}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc  {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc  {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). Times are in seconds and TO counts the $120$\,s cap. rs/inst counts positions handed back to the sampler per instance; its unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. It does not count tokens the joint search rewrites (\S  \ref {sec:results}). DPG is DPGrammar.}}{6}{table.1}\protected@file@percent }
+\newlabel{tab:difficulty}{{1}{6}{The difficulty gradient on LLaDA-8B-Instruct. Each arm is scored on the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG share the \textsc {llguidance} set exactly, while $\dagger $ marks CD-CFG, whose \textsc {rustformlang} front-end accepts a smaller subset (Appendix~\ref {sec:coverage}). Times are in seconds and TO counts the $120$\,s cap. rs/inst counts positions handed back to the sampler per instance; its unit differs by arm (remasks, lookahead draws, rejected candidates), so only no-DP and DPG compare there. It does not count tokens the joint search rewrites (\S \ref {sec:results}). DPG is DPGrammar}{table.1}{}}
 \@writefile{toc}{\contentsline {paragraph}{Metrics.}{6}{section*.9}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Main results}{6}{subsection.4.2}\protected@file@percent }
 \newlabel{sec:results}{{4.2}{6}{Main results}{subsection.4.2}{}}
@@ -91,8 +91,8 @@
 \def\@LN@column{1}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Ablations: what moves the metric is the search space, not the objective}{8}{subsection.4.4}\protected@file@percent }
 \newlabel{sec:ablation}{{4.4}{8}{Ablations: what moves the metric is the search space, not the objective}{subsection.4.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Ablation of the repair layer's components, on JSONSchemaBench \texttt  {medium} with one seed. The upper block changes what the search ranges over; the merge width is measured on the search itself rather than end to end (\S  \ref {sec:dp}). The lower block changes the objective or the admission rule and leaves schema@1 where it is.}}{8}{table.4}\protected@file@percent }
-\newlabel{tab:ablation}{{4}{8}{Ablation of the repair layer's components, on JSONSchemaBench \texttt {medium} with one seed. The upper block changes what the search ranges over; the merge width is measured on the search itself rather than end to end (\S \ref {sec:dp}). The lower block changes the objective or the admission rule and leaves schema@1 where it is}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Ablation of the repair layer's components, on JSONSchemaBench \texttt  {medium} with one seed. The upper block changes what the search ranges over; the merge width is measured on the search itself rather than end to end (\S  \ref {sec:dp}). The lower block changes the objective or the admission rule and leaves schema@1 where it is. One-char string leaves are the share of an output's string leaves that hold a single character, averaged over outputs.}}{8}{table.4}\protected@file@percent }
+\newlabel{tab:ablation}{{4}{8}{Ablation of the repair layer's components, on JSONSchemaBench \texttt {medium} with one seed. The upper block changes what the search ranges over; the merge width is measured on the search itself rather than end to end (\S \ref {sec:dp}). The lower block changes the objective or the admission rule and leaves schema@1 where it is. One-char string leaves are the share of an output's string leaves that hold a single character, averaged over outputs}{table.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5}Conclusion}{8}{section.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {6}Limitations and future work}{8}{section.6}\protected@file@percent }
 \newlabel{sec:limits}{{6}{8}{Limitations and future work}{section.6}{}}
@@ -153,34 +153,41 @@
 \@writefile{toc}{\contentsline {paragraph}{Two behaviours the table cannot carry.}{13}{section*.20}\protected@file@percent }
 \citation{microsoft2025llguidance}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {E}The parser interface}{14}{appendix.E}\protected@file@percent }
-\newlabel{app:api}{{E}{14}{The parser interface}{appendix.E}{}}
-\@writefile{toc}{\contentsline {paragraph}{Construction.}{14}{section*.21}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{The five operations.}{14}{section*.22}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Two details the method depends on.}{14}{section*.23}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{How much the abstraction costs.}{14}{section*.24}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {E}What the search guarantees}{14}{appendix.E}\protected@file@percent }
+\newlabel{app:properties}{{E}{14}{What the search guarantees}{appendix.E}{}}
+\@writefile{toc}{\contentsline {paragraph}{1. Local soundness, unconditional.}{14}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{2. Termination, and an answer where one exists.}{14}{section*.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{3. Optimality, under exact state identity.}{14}{section*.23}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{4. The merging approximation, measured and not bounded.}{14}{section*.24}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{5. Complexity, output-sensitive.}{14}{section*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {F}The parser interface}{14}{appendix.F}\protected@file@percent }
+\newlabel{app:api}{{F}{14}{The parser interface}{appendix.F}{}}
+\@writefile{toc}{\contentsline {paragraph}{Construction.}{14}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{The five operations.}{14}{section*.27}\protected@file@percent }
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {F}Prevention on the subset where prevention is available}{15}{appendix.F}\protected@file@percent }
-\newlabel{app:prevention}{{F}{15}{Prevention on the subset where prevention is available}{appendix.F}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Prevention against repair on the first $128$ instances of JSONSchemaBench \texttt  {medium} in identifier order, less $27$ on which automaton construction exhausted a $32$\,GiB container before any decoder ran, leaving $101$; same backbone, prompts and schedule throughout. Rates are over all $101$, so a schema an arm's toolchain cannot accept counts against it: the guarantee the prevention arms carry is over the documents they produce, not over the workload. Constraint time is each arm's own instrumentation and the two harnesses measure it differently, so it is compared as an order of magnitude rather than as a ratio.}}{15}{table.5}\protected@file@percent }
-\newlabel{tab:prevention}{{5}{15}{Prevention against repair on the first $128$ instances of JSONSchemaBench \texttt {medium} in identifier order, less $27$ on which automaton construction exhausted a $32$\,GiB container before any decoder ran, leaving $101$; same backbone, prompts and schedule throughout. Rates are over all $101$, so a schema an arm's toolchain cannot accept counts against it: the guarantee the prevention arms carry is over the documents they produce, not over the workload. Constraint time is each arm's own instrumentation and the two harnesses measure it differently, so it is compared as an order of magnitude rather than as a ratio}{table.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{Two details the method depends on.}{15}{section*.28}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{How much the abstraction costs.}{15}{section*.29}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {G}Prevention on the subset where prevention is available}{15}{appendix.G}\protected@file@percent }
+\newlabel{app:prevention}{{G}{15}{Prevention on the subset where prevention is available}{appendix.G}{}}
 \citation{cd4dllm}
 \citation{microsoft2025llguidance}
 \def\@LN@column{1}
-\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Grammar coverage is a property of the compiler, not of the decoder. Validity is measured only where both toolchains compile, so the two effects are not confounded.}}{16}{table.6}\protected@file@percent }
-\newlabel{tab:coverage}{{6}{16}{Grammar coverage is a property of the compiler, not of the decoder. Validity is measured only where both toolchains compile, so the two effects are not confounded}{table.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {G}Comparing on shared populations}{16}{appendix.G}\protected@file@percent }
-\newlabel{sec:coverage}{{G}{16}{Comparing on shared populations}{appendix.G}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {H}Other decoding schedules}{16}{appendix.H}\protected@file@percent }
-\newlabel{app:schedules}{{H}{16}{Other decoding schedules}{appendix.H}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces The same two arms under three decoding schedules, on the $511$ \texttt  {medium} instances \textsc  {llguidance} compiles. \emph  {sched.\ end} is the share of instances whose generation stopped because the $T{=}128$ denoising schedule ran out rather than because the grammar permitted an end.}}{16}{table.7}\protected@file@percent }
-\newlabel{tab:schedules}{{7}{16}{The same two arms under three decoding schedules, on the $511$ \texttt {medium} instances \textsc {llguidance} compiles. \emph {sched.\ end} is the share of instances whose generation stopped because the $T{=}128$ denoising schedule ran out rather than because the grammar permitted an end}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Prevention against repair on the first $128$ instances of JSONSchemaBench \texttt  {medium} in identifier order, less $27$ on which automaton construction exhausted a $32$\,GiB container before any decoder ran, leaving $101$; same backbone, prompts and schedule throughout. Rates are over all $101$, so a schema an arm's toolchain cannot accept counts against it: the guarantee the prevention arms carry is over the documents they produce, not over the workload. Constraint time is each arm's own instrumentation and the two harnesses measure it differently, so it is compared as an order of magnitude rather than as a ratio.}}{16}{table.5}\protected@file@percent }
+\newlabel{tab:prevention}{{5}{16}{Prevention against repair on the first $128$ instances of JSONSchemaBench \texttt {medium} in identifier order, less $27$ on which automaton construction exhausted a $32$\,GiB container before any decoder ran, leaving $101$; same backbone, prompts and schedule throughout. Rates are over all $101$, so a schema an arm's toolchain cannot accept counts against it: the guarantee the prevention arms carry is over the documents they produce, not over the workload. Constraint time is each arm's own instrumentation and the two harnesses measure it differently, so it is compared as an order of magnitude rather than as a ratio}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {H}Comparing on shared populations}{16}{appendix.H}\protected@file@percent }
+\newlabel{sec:coverage}{{H}{16}{Comparing on shared populations}{appendix.H}{}}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {I}Where the extra wall time goes}{17}{appendix.I}\protected@file@percent }
-\newlabel{app:workload}{{I}{17}{Where the extra wall time goes}{appendix.I}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Averages per instance on JSONSchemaBench \texttt  {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both.}}{17}{figure.3}\protected@file@percent }
-\newlabel{fig:workload}{{3}{17}{Averages per instance on JSONSchemaBench \texttt {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both}{figure.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {J}Why validity alone is not enough}{17}{appendix.J}\protected@file@percent }
-\newlabel{app:example}{{J}{17}{Why validity alone is not enough}{appendix.J}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Grammar coverage is a property of the compiler, not of the decoder. Validity is measured only where both toolchains compile, so the two effects are not confounded.}}{17}{table.6}\protected@file@percent }
+\newlabel{tab:coverage}{{6}{17}{Grammar coverage is a property of the compiler, not of the decoder. Validity is measured only where both toolchains compile, so the two effects are not confounded}{table.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Other decoding schedules}{17}{appendix.I}\protected@file@percent }
+\newlabel{app:schedules}{{I}{17}{Other decoding schedules}{appendix.I}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces The same two arms under three decoding schedules, on the $511$ \texttt  {medium} instances \textsc  {llguidance} compiles. \emph  {sched.\ end} is the share of instances whose generation stopped because the $T{=}128$ denoising schedule ran out rather than because the grammar permitted an end.}}{17}{table.7}\protected@file@percent }
+\newlabel{tab:schedules}{{7}{17}{The same two arms under three decoding schedules, on the $511$ \texttt {medium} instances \textsc {llguidance} compiles. \emph {sched.\ end} is the share of instances whose generation stopped because the $T{=}128$ denoising schedule ran out rather than because the grammar permitted an end}{table.7}{}}
 \def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {J}Where the extra wall time goes}{18}{appendix.J}\protected@file@percent }
+\newlabel{app:workload}{{J}{18}{Where the extra wall time goes}{appendix.J}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Averages per instance on JSONSchemaBench \texttt  {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both.}}{18}{figure.3}\protected@file@percent }
+\newlabel{fig:workload}{{3}{18}{Averages per instance on JSONSchemaBench \texttt {medium}, split by whether the repair layer ever fired. (a) The mean difference is concentrated in the $173$ instances where it did; on the other $338$ the layer is slightly faster. (b) On those instances it emits $71\%$ more tokens and needs proportionally more forward passes, while remasking $28\times $ less. (c) Per unit the two arms are close, and the constraint machinery costs the same in both}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {K}Why validity alone is not enough}{18}{appendix.K}\protected@file@percent }
+\newlabel{app:example}{{K}{18}{Why validity alone is not enough}{appendix.K}{}}
 \gdef \@abspage@last{18}

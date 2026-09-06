@@ -8,8 +8,8 @@ parser actually admits at a live state. This appendix gives the measurement and
 the full distribution.
 
 \paragraph{Procedure.}
-We take the $40$ generated outputs of the DPGrammar run on JSONSchemaBench
-\texttt{medium} (seed $0$, $T{=}128$) whose schemas compile, and replay each one
+We take the first $40$ outputs, in file order, of the DPGrammar run on
+JSONSchemaBench \texttt{medium} (seed $0$, $T{=}128$) whose schemas compile, and replay each one
 through \texttt{llguidance}~1.7.0 under teacher forcing: the parser is
 initialised from the instance's schema, and the tokens the model actually
 produced are fed to it one at a time. Before consuming each token we call
@@ -141,7 +141,7 @@ error, and the correct repair, moving a block, is not expressible by a
 positional DP, which can only overwrite in place. The repair then writes the
 demanded key name over a value intended for another field. We measured this class
 at $6.6\%$ of the $1{,}106$ violations the reported \texttt{medium} run records
-across $276$ instances, and at $22\%$ of the $120$ that occur where the grammar
+across $276$ instances, and at $50\%$ of the $120$ that occur where the grammar
 admits exactly one token, where a positional DP has no alternative to write.
 
 
@@ -194,7 +194,7 @@ paths kept per key       &     & $1$ & widening it changes nothing measured \\
 \midrule
 \multicolumn{4}{l}{\emph{Budgets and batching}}\\
 hand-backs per instance  &     & $100$ & a run that exceeds it is reported as is \\
-DP wall-clock per instance&    & $240$\,s & below the $120$\,s scoring cap \\
+DP wall-clock per instance&    & $240$\,s & never binds: scoring caps at $120$\,s \\
 commit batch cap         &     & $8$ tokens & \\
 commit batch growth      &     & $\times 2$ on a clean step & reset to $1$ on any violation \\
 batch growth gated until &     & $\tfrac{3}{4}T$ & early positions get a pass each \\
@@ -217,6 +217,50 @@ whose repair sits below rank $10$ cannot exhaust the budget before the search is
 reached. Second, mask construction for the next position is issued
 asynchronously and joined after the current forward pass, and any state change
 at the frontier discards the pending mask rather than using a stale one.
+
+\section{What the search guarantees}
+\label{app:properties}
+
+The properties the repair layer relies on are stated separately here, since they
+hold under different conditions and two of them are approximate.
+
+\paragraph{1. Local soundness, unconditional.}
+Every token the search places is one the parser consumed from the state that
+precedes it: candidates are drawn from $\mathcal{L}(q)$ and the backtrace follows
+predecessor links rather than re-deriving a path from keys. No setting of $k$,
+$L$ or the merge width can make the search emit a span the grammar rejects.
+
+\paragraph{2. Termination, and an answer where one exists.}
+The pass halts after at most one layer per position of the span. $\mathcal{C}$ is
+empty only where the grammar admits nothing but a stop token, which
+\S\ref{sec:stop} disposes of before the search runs, and no live state we
+measured had an empty legal set ($0$ of $6{,}657$,
+Appendix~\ref{app:legalsets}). Where a later layer empties, the pass returns the
+prefix it has and the remaining positions keep the tokens the model wrote, which
+Algorithm~\ref{alg:dp} treats as the span finishing rather than failing.
+
+\paragraph{3. Optimality, under exact state identity.}
+Were $\kappa$ injective on reachable parser states, the pass would return the
+maximiser of $\sum_p \log p_\theta$ over the candidate lattice, by the usual
+Viterbi argument. Two approximations separate that from the maximiser over all
+valid assignments of the span: the candidate budget $k$, and $\kappa$ itself.
+
+\paragraph{4. The merging approximation, measured and not bounded.}
+$\kappa$ is not injective; Appendix~\ref{app:api} gives a schema on which four
+states owing different numbers of array elements share a mask. Merging can
+therefore discard a higher-scoring path, though never a valid one, by (1).
+Widening the merge to four paths per key changes the returned assignment at
+$0.33\%$ of solves. That is a lower bound on the loss and not a bound on it: the
+only comparison against a genuinely unmerged search is on a lattice small enough
+to enumerate, where the merged search returned the lattice optimum in all
+$7{,}836$ solves.
+
+\paragraph{5. Complexity, output-sensitive.}
+Each layer holds at most $|S|$ states and expands at most $k$ candidates from
+each, so the pass costs $O(\text{span}\cdot|S|\cdot k)$ parser operations and
+$O(|S|)$ live parsers. $|S|$ is the number of distinct masks the grammar can
+present at one position; nothing bounds it a priori, and it stayed in the single
+digits in every run reported here. Span length is not an exponent for any $|S|$.
 
 \section{The parser interface}
 \label{app:api}
@@ -367,7 +411,7 @@ no-DP (ours)        & $92$ ($91.1\%$) & $83.2$ & $67.3$ & $13$ & $\mathbf{13.4}$
 \end{tabular}
 \end{table}
 
-Prevention pays on all three axes at once. It reaches a third fewer schemas: an
+Prevention pays on all three axes at once. It reaches a quarter fewer schemas: an
 automaton is built for $66\%$ of the sample against the incremental parser's
 $91\%$. The gap is not a tuning choice but the size of the object being asked
 for. Of the $34$ schemas the construction does not deliver, $16$ exceed the edge
@@ -389,13 +433,16 @@ constraint is drawn to it, and closing a structure costs one token where content
 pays entropy at every position.
 
 One number here is worth reading against the guarantee rather than past it.
-Validity is $58$--$59\%$ over the sample and $88$--$91\%$ over the instances the
-prevention arms actually run, not $100\%$. The constraint is enforced on every
-prefix, so nothing invalid is ever \emph{sampled}; what the guarantee does not
-cover is running out of generation length before the document closes, which
-leaves a prefix that is in the automaton's language and not in the schema's.
-Prevention removes the violations a decoder commits. It does not remove the ones
-a budget imposes.
+Validity is $88$--$91\%$ over the instances the prevention arms actually run, not
+$100\%$, and the shortfall is not the decoder. Every output is a string the
+automaton accepts; the automaton is simply not the schema. Compiling a JSON
+Schema to a finite automaton under a nesting bound is lossy in the permissive
+direction, and of the eight invalid outputs among the $67$ the mode decoder
+produced, four place a string where the schema requires an object, one exceeds a
+numeric \texttt{maximum}, one violates a \texttt{pattern}, one satisfies no branch of an
+\texttt{anyOf}, and one is not JSON at all. None is truncated. Prevention is exact with respect to the automaton it is
+given, which makes its guarantee only as good as that compilation, and this is
+the fourth cost the guarantee carries alongside coverage, latency and content.
 
 \section{Comparing on shared populations}
 \label{sec:coverage}
@@ -411,7 +458,7 @@ not confounded.}
 \toprule
 Method & Toolchain & Schemas compiled & Validity on the shared $351$ \\
 \midrule
-CD-CFG             & \textsc{rustformlang} & $383/586$ ($65.4\%$) & $45.0\%$ \\
+CD-CFG             & \textsc{rustformlang} & $383/586$ ($65.4\%$) & $66.1\%$ \\
 LAVE               & \textsc{llguidance}   & $511/586$ ($87.2\%$) & $82.3\%$ \\
 No-DP baseline     & \textsc{llguidance}   & $511/586$ ($87.2\%$) & $92.6\%$ \\
 \textbf{DPGrammar} & \textsc{llguidance}   & $511/586$ ($87.2\%$) & $\mathbf{97.4\%}$ \\
@@ -430,11 +477,19 @@ compile. Coverage differs widely: \textsc{rustformlang} rejects $203$ of $586$,
 mostly over regular-expression quantifiers that Python's \texttt{re} accepts,
 where \textsc{llguidance} accepts $511$.
 
-On the shared $351$, CD-CFG reaches $45.0\%$ with $19$ timeouts against
+On the shared $351$, CD-CFG reaches $66.1\%$ with $19$ timeouts against
 DPGrammar's $97.4\%$ with none, and every arm scores higher there than on its own
 full set, so the $160$ schemas only \textsc{llguidance} compiles are the harder
-ones. That CD-CFG also falls below the unconstrained decoder at every tier of
-Table~\ref{tab:difficulty} is this coverage gap rather than its decoding. LAVE
+ones.
+
+CD-CFG is scored with the \texttt{autocomplete\_valid} post-processing its own
+released code applies after decoding, which closes a document the decoder left
+open. That step is worth about twenty points and we report the arm with it: on
+\texttt{medium} it takes CD-CFG from $44.1\%$ to $64.8\%$, on \texttt{easy} from
+$56.3\%$ to $79.1\%$, on \texttt{hard} from $11.4\%$ to $32.2\%$, and on the
+shared $351$ from $45.0\%$ to $66.1\%$. Without it the arm falls below the
+unconstrained decoder at every tier; with it, it does not. Our own arms use no
+comparable step: a DPGrammar document is closed by the grammar or not at all. LAVE
 needs the same treatment for a different reason: it runs on the same $511$ we do
 but reaches the cap on $60$, and judging it only where it finishes raises it from
 $78.3\%$ to $88.7\%$ against our $97.3\%$ on that same $451$. Neither adjustment
