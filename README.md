@@ -1,7 +1,6 @@
 # DPGrammar — Joint Viterbi Repair for Grammar-Constrained Diffusion Language Models
 
-Jeng-Yue Liu, Carnegie Mellon University
-Guan-Ming Chiu, National Taiwan University
+Jeng-Yue Liu, Guan-Ming Chiu
 
 Paper: [`neurips/main.pdf`](neurips/main.pdf) · source in [`neurips/`](neurips/)
 
