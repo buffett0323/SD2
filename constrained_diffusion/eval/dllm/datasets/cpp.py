@@ -130,13 +130,24 @@ class CppDataSet(DataSet):
         """
         Returns the dataset instances.
         This is used to iterate over the dataset.
+
+        ``zai-org/humaneval-x`` ships as a loading script, which ``datasets``
+        dropped support for in 5.0. ``bigcode/humanevalpack`` is the same 164
+        HumanEval-X problems republished as parquet and carries every field this
+        class reads (task_id, prompt, declaration, canonical_solution, test), so
+        it is used as the fallback rather than pinning ``datasets`` back.
         """
         if self._dataset is None:
             from datasets import load_dataset
 
-            self._dataset = load_dataset(
-                "zai-org/humaneval-x", self._subset, trust_remote_code=True
-            )[self._split]
+            try:
+                self._dataset = load_dataset(
+                    "zai-org/humaneval-x", self._subset, trust_remote_code=True
+                )[self._split]
+            except (RuntimeError, ValueError, TypeError):
+                self._dataset = load_dataset(
+                    "bigcode/humanevalpack", self._subset, split=self._split
+                )
         return self._dataset
 
     def __iter__(self) -> Iterator[Instance]:

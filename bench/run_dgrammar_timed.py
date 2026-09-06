@@ -15,6 +15,7 @@ from constrained_diffusion.eval.dllm.model import load_model
 import jsb_dataset  # noqa: F401 - registers jsb_* datasets
 from dgrammar.checker import TokenChecker
 from dgrammar.generate import add_gumbel_noise, get_num_transfer_tokens
+from dgrammar.dp_generate import only_stop_remains
 
 
 class TimingStats:
@@ -31,6 +32,38 @@ class TimingStats:
         self.tokens_unmasked = 0
         self.batch_sizes = []
         self.overlap_count = 0  # how many mask computes were overlapped
+        # `resample_count` counts different events in the two generators:
+        # generate_async_timed increments it for every candidate token the
+        # grammar rejects while walking down the ranked list, generate_dp only
+        # when a position is actually handed back to the sampler.  Comparing
+        # them made an unconstrained retry loop look 12x more expensive than it
+        # is.  These two are defined identically in both.
+        self.rejections = 0   # candidate token refused by the grammar
+        self.handbacks = 0    # position remasked and returned to the sampler
+        # path -> decoded token -> count, for every token written at a violator.
+        self.writes: dict[str, dict[str, int]] = {}
+        self._decode_cache: dict[int, str] = {}
+
+    def write(self, path: str, token_id: int, tokenizer=None) -> None:
+        """Record which repair path wrote a token, and what the token was.
+
+        Every arm carries empty strings at ~6% of string leaves against the
+        unconstrained baseline's 0.6%, and the rate does not move with window
+        mode, candidate set, or dead-end rate -- so it is not the DP
+        search.  This says which path is actually writing the closing quote.
+        """
+        text = self._decode_cache.get(token_id)
+        if text is None:
+            try:
+                text = tokenizer.decode([token_id]) if tokenizer else f"<{token_id}>"
+            except Exception:
+                # Byte-level or malformed tokens must not take down a run for
+                # the sake of a counter.
+                text = f"<{token_id}>"
+            self._decode_cache[token_id] = text
+        d = self.writes.setdefault(path, {})
+        if text in d or len(d) < 64:
+            d[text] = d.get(text, 0) + 1
 
     def summary(self):
         fwd = self.forward_times
@@ -58,6 +91,10 @@ class TimingStats:
             "token_select_total_ms": sum(ts) * 1000,
             "token_select_mean_ms": (sum(ts) / len(ts) * 1000) if ts else 0,
             "resample_count": self.resample_count,
+            "rejections": self.rejections,
+            "handbacks": self.handbacks,
+            "writes": {k: dict(sorted(v.items(), key=lambda kv: -kv[1])[:24])
+                       for k, v in self.writes.items()},
             "tokens_unmasked": self.tokens_unmasked,
             "avg_batch_size": (sum(self.batch_sizes) / len(self.batch_sizes)) if self.batch_sizes else 0,
         }
@@ -844,7 +881,15 @@ def generate_async_timed(
                     total_violations += 1
                     consume_idx = new_idx
 
-                    if checker.is_accepting():
+                    # only_stop_remains: the parser cannot do anything but
+                    # stop.  Or the model placed a stop token at the frontier
+                    # and the grammar permits stopping, which is what
+                    # is_accepting() means -- the model asked, so the harness
+                    # is not deciding anything.  Mirrors generate_dp.
+                    _viol_tok = x[0, violator].item()
+                    if (only_stop_remains(checker.matcher, eos_id, eot_id)
+                            or (_viol_tok in (eos_id, eot_id)
+                                and checker.is_accepting())):
                         for j in range(violator, x.shape[1]):
                             x[0, j] = eos_id
                         complete = True
@@ -856,6 +901,7 @@ def generate_async_timed(
                     x[0, violator] = mask_id
                     total_remasks += 1
                     STATS.resample_count += 1
+                    STATS.handbacks += 1
                     tokens_placed_this_step -= 1
                     STATS.tokens_unmasked -= 1
                     resamples.append((violator, time.monotonic() - start_time))
@@ -875,6 +921,7 @@ def generate_async_timed(
                         STATS.grammar_check_times.append(time.perf_counter() - t_gc_retry)
                         if c == 1:
                             x[0, violator] = next_vocab
+                            STATS.write("greedy", next_vocab, tokenizer)
                             consume_idx += 1
                             tokens_placed_this_step += 1
                             STATS.tokens_unmasked += 1
@@ -891,11 +938,12 @@ def generate_async_timed(
                         logits_with_noise[0, violator, next_vocab] = -np.inf
                         total_remasks += 1
                         STATS.resample_count += 1
+                        STATS.rejections += 1
                         resamples.append((violator, time.monotonic() - start_time))
                     current_batch = 1
 
                 # Check completion
-                if not complete and checker.is_accepting():
+                if not complete and only_stop_remains(checker.matcher, eos_id, eot_id):
                     gen_ids = x[0, gen_start:].tolist()
                     first_mask = next((j for j, t in enumerate(gen_ids) if t == mask_id), len(gen_ids))
                     if first_mask >= consume_idx - gen_start:
@@ -903,14 +951,11 @@ def generate_async_timed(
                             x[0, j] = eos_id
                         complete = True
 
-                if not complete:
-                    gen_ids = x[0, gen_start:].tolist()
-                    if eos_id in gen_ids or eot_id in gen_ids:
-                        eos_pos = next((j for j, t in enumerate(gen_ids) if t in (eos_id, eot_id)), None)
-                        if eos_pos is not None and mask_id not in gen_ids[:eos_pos]:
-                            for j in range(eos_pos, len(gen_ids)):
-                                x[0, gen_start + j] = x[0, gen_start + eos_pos]
-                            complete = True
+                # A stop token beyond the frontier used to end the document
+                # from its own position, keeping everything between the
+                # frontier and it -- positions the parser never validated.
+                # Removed here as in generate_dp, so the two arms stay
+                # comparable; a stop token at the frontier is handled above.
 
             yield x, resamples, False, total_violations, total_remasks, total_grammar_checks
 
@@ -941,11 +986,38 @@ def main():
     instance_ids_filter: set | None = None
     if len(sys.argv) > 8 and sys.argv[8]:
         instance_ids_filter = set(sys.argv[8].split(","))
-    deviation_penalty = float(sys.argv[9]) if len(sys.argv) > 9 else 0.0
-    # Optional tag suffix to avoid overwriting main results (e.g. "debug", "devpen3")
-    file_tag = sys.argv[10] if len(sys.argv) > 10 and sys.argv[10] else ""
-    gen_length = int(sys.argv[11]) if len(sys.argv) > 11 and sys.argv[11] else 256
-    min_complete_frac = float(sys.argv[12]) if len(sys.argv) > 12 and sys.argv[12] else 0.0
+    # Optional tag suffix to avoid overwriting main results (e.g. "debug")
+    file_tag = sys.argv[9] if len(sys.argv) > 9 and sys.argv[9] else ""
+    gen_length = int(sys.argv[10]) if len(sys.argv) > 10 and sys.argv[10] else 256
+    # Oracle probe: at every repair site, re-run the same DP with the prefix
+    # unfrozen and record whether a better answer existed outside the repair's
+    # reach. Measurement only; generation is unaffected.
+    oracle = bool(int(sys.argv[11])) if len(sys.argv) > 11 and sys.argv[11] else False
+    # Repair window. "full" is the default: it hands the whole constraint span
+    # to the DP in one shot, which is what removed the degeneracy the published
+    # `progressive` order produced. "progressive" is kept as the baseline arm.
+    window_mode = sys.argv[12] if len(sys.argv) > 12 and sys.argv[12] else "full"
+    # argv[13]: DP repair objective. "logp" maximises probability over the span
+    # and rewrites positions the grammar never objected to; "min_edit" changes
+    # as few positions as the grammar forces.
+    objective = sys.argv[13] if len(sys.argv) > 13 and sys.argv[13] else "logp"
+    # argv[14]: where DP candidates come from.  "automaton" is the method;
+    # "vocab" reproduces the filter-then-propose order for the ablation.
+    cand_source = sys.argv[14] if len(sys.argv) > 14 and sys.argv[14] else "automaton"
+    # argv[15]: keep EOS/EOT in the DP candidate set.  The bias marks them
+    # legal at accepting states but they are not consumable, so the default
+    # drops them; this flag measures what offering them costs.
+    eos_in_candidates = (sys.argv[15] == "1") if len(sys.argv) > 15 and sys.argv[15] else False
+
+    # Budget sweep (\S "How the budgets matter").  Both default to the reported
+    # configuration, so omitting them reproduces the main runs exactly.
+    top_k_dp = int(sys.argv[16]) if len(sys.argv) > 16 and sys.argv[16] else 100
+    max_lookahead = int(sys.argv[17]) if len(sys.argv) > 17 and sys.argv[17] else 48
+
+    # Unmasking order. "low_confidence" is the reported schedule; any other value
+    # selects the positions a step reveals at random, which is the
+    # schedule-agnosticism test. The default preserves the reported runs.
+    remasking = sys.argv[18] if len(sys.argv) > 18 and sys.argv[18] else "low_confidence" 
 
     if method == "dp":
         method_tag = "dp"
@@ -959,7 +1031,7 @@ def main():
     output_file = f"results/{method_tag}_{ds_safe}_s{seed}_t{steps}{sfx}{tag_sfx}.jsonl"
 
     if method == "dp":
-        from dgrammar.dp_generate import generate_dp
+        from dgrammar.dp_generate import generate_dp, OracleStats, SpanStats
 
     dataset = load_dataset(dataset_name)
     eval_model = load_model("GSAI-ML/LLaDA-8B-Instruct")
@@ -974,7 +1046,10 @@ def main():
     else:
         instances = all_instances[offset:offset + limit]
     bl = (gen_length // 8) if block_ar else gen_length
-    print(f"Dgrammar timed [{method}]: {len(instances)} instances, seed={seed}, T={steps}, gen_length={gen_length}, block_length={bl}")
+    print(f"Dgrammar timed [{method}]: {len(instances)} instances, seed={seed}, T={steps}, "
+          f"gen_length={gen_length}, block_length={bl}"
+          + f", remasking={remasking}"
+          + (f", window={window_mode}, objective={objective}, k={top_k_dp}, L={max_lookahead}" if method == "dp" else ""))
 
     # Load ground-truth for functional@k (JSON-Mode-Eval / jsonschema dataset only)
     _gt_solutions: list[str] | None = None
@@ -1041,9 +1116,21 @@ def main():
                 _write_timeout(remaining, "modal_deadline")
             break
 
-        schema_str = instance.data.get("schema", "")
+        # Ask the instance for its grammar rather than reaching into its data
+        # dict.  Only the JSON-schema datasets keep it under "schema"; SMILES
+        # and C++ carry a lark CFG and would every one of them be written off as
+        # "no_schema" and never decoded.  TokenChecker already accepts either --
+        # it json.loads() the string and falls back to grammar_from_lark -- so
+        # this is the only place that assumed JSON.  JSBInstance.cfg() returns
+        # exactly data["schema"], so jsb behaviour is unchanged.
+        try:
+            schema_str = instance.cfg()
+        except Exception as e:
+            print(f"  Skipping {instance.instance_id()}: cfg() failed: {e}")
+            _write_timeout(instance, f"cfg_error: {e}")
+            continue
         if not schema_str:
-            print(f"  Skipping {instance.instance_id()}: no schema")
+            print(f"  Skipping {instance.instance_id()}: no grammar")
             _write_timeout(instance, "no_schema")
             continue
 
@@ -1083,35 +1170,56 @@ def main():
         dp_consume_idx = None  # final consume_idx from DP generator
 
         if method == "dp":
-            gen_kwargs = dict(stats=STATS)
+            _oracle = OracleStats() if oracle else None
+            # Always on: no forward pass, no extra DP -- just an integer scan
+            # per repair site, so every arm carries it.
+            _span = SpanStats()
+            gen_kwargs = dict(stats=STATS, oracle_stats=_oracle, span_stats=_span,
+                              )
             gen_fn = generate_dp
         else:
             gen_kwargs = {}
             gen_fn = generate_async_timed
 
-        if method == "dp":
-            _gen_t0 = time.monotonic()
-            for out, resamples, valid, violations, remasks, grammar_checks, dp_consume_idx in gen_fn(
-                model, prompt_ids, tokenizer, checker=checker,
-                prompt_len=prompt_len, steps=steps, gen_length=gen_length,
-                block_length=bl, temperature=0.2, remasking="low_confidence",
-                max_batch_size=8, max_resamples=100, max_dp_secs=240.0,
-                deviation_penalty=deviation_penalty, min_complete_frac=min_complete_frac, **gen_kwargs,
-            ):
-                total_violations = violations
-                total_remasks = remasks
-                total_grammar_checks = grammar_checks
-            print(f"  [dp] gen done in {time.monotonic()-_gen_t0:.1f}s  violations={total_violations} resamples={len(resamples)} dp_calls={grammar_checks}")
-        else:
-            for out, resamples, valid, violations, remasks, grammar_checks in gen_fn(
-                model, prompt_ids, tokenizer, checker=checker,
-                prompt_len=prompt_len, steps=steps, gen_length=gen_length,
-                block_length=bl, temperature=0.2, remasking="low_confidence",
-                max_batch_size=8, max_resamples=100, **gen_kwargs,
-            ):
-                total_violations = violations
-                total_remasks = remasks
-                total_grammar_checks = grammar_checks
+        # A single instance can exhaust the device: jsb_hard schemas build large
+        # NFAs and the 256-position logit tensor on top of them overflowed both
+        # 40 GB and 80 GB cards.  Uncaught, that killed the whole chunk and lost
+        # every instance after it -- four of six shards returned fewer than 20 of
+        # 62 rows.  Record the instance as a failure, release the cache, carry on.
+        try:
+          if method == "dp":
+              _gen_t0 = time.monotonic()
+              for out, resamples, valid, violations, remasks, grammar_checks, dp_consume_idx in gen_fn(
+                  model, prompt_ids, tokenizer, checker=checker,
+                  prompt_len=prompt_len, steps=steps, gen_length=gen_length,
+                  block_length=bl, temperature=0.2, remasking=remasking,
+                  max_batch_size=8, max_resamples=100, max_dp_secs=240.0,
+                  top_k_dp=top_k_dp, max_lookahead=max_lookahead,
+                  window_mode=window_mode, objective=objective,
+                  cand_source=cand_source,
+                  eos_in_candidates=eos_in_candidates, **gen_kwargs,
+              ):
+                  total_violations = violations
+                  total_remasks = remasks
+                  total_grammar_checks = grammar_checks
+              print(f"  [dp] gen done in {time.monotonic()-_gen_t0:.1f}s  violations={total_violations} resamples={len(resamples)} dp_calls={grammar_checks}")
+          else:
+              for out, resamples, valid, violations, remasks, grammar_checks in gen_fn(
+                  model, prompt_ids, tokenizer, checker=checker,
+                  prompt_len=prompt_len, steps=steps, gen_length=gen_length,
+                  block_length=bl, temperature=0.2, remasking=remasking,
+                  max_batch_size=8, max_resamples=100, **gen_kwargs,
+              ):
+                  total_violations = violations
+                  total_remasks = remasks
+                  total_grammar_checks = grammar_checks
+        except torch.cuda.OutOfMemoryError as e:
+            del out
+            out = None
+            torch.cuda.empty_cache()
+            print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: CUDA OOM")
+            _write_timeout(instance, f"cuda_oom: {str(e)[:80]}")
+            continue
 
         # ── Per-instance wall-clock budget: 270s for gen, 60s for autocomplete,
         #    leaving headroom for force_close and I/O within a 360s total budget.
@@ -1405,6 +1513,17 @@ def main():
                 "mask_time_saved_ms": timing["mask_compute_total_ms"] - timing["mask_wait_total_ms"],
             },
         }
+
+        if method == "dp" and _oracle is not None:
+            result["oracle"] = _oracle.summary()
+            result["oracle_sites_detail"] = _oracle.sites[:40]
+
+        if method == "dp":
+            result["span"] = _span.summary()
+            result["span_sites_detail"] = _span.sites[:200]
+            result["resample_reasons"] = dict(_span.resample_reasons)
+            result["violations_detail"] = _span.violations[:200]
+            result["stop"] = dict(_span.stop)
 
         # Save schema (enables schema-validation post-processing for jsb datasets)
         _inst_data = getattr(instance, 'data', None)
