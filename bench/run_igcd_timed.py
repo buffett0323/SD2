@@ -19,6 +19,7 @@ Records:
   - total constraint overhead vs model forward breakdown
 """
 
+import gc
 import json
 import time
 import sys
@@ -299,8 +300,17 @@ def main():
     steps = int(sys.argv[4]) if len(sys.argv) > 4 else 128
     offset = int(sys.argv[5]) if len(sys.argv) > 5 else 0
     instance_timeout = int(sys.argv[6]) if len(sys.argv) > 6 else 120
+    # argv[7]: 0 runs the same driver with the grammar switched off, which is
+    # the Vanilla row -- same backbone, same schedule, same T, no constraint.
+    # Everything else about the loop is unchanged, so the difference isolates
+    # the constraint rather than the harness.
+    constrain = (sys.argv[7] != "0") if len(sys.argv) > 7 and sys.argv[7] else True
 
-    tag = "igcd_timed"
+    # The wrapper uploads /root/results/{igcd,vanilla}_timed_*.jsonl by prefix.
+    # A hardcoded tag here made the unconstrained arm write igcd_timed_* while
+    # the wrapper looked for vanilla_timed_*: the rows were computed and then
+    # dropped on the floor, three launches in a row.
+    tag = "igcd_timed" if constrain else "vanilla_timed"
     ds_safe = dataset_name.replace("/", "_")
     suffix = f"_off{offset}" if offset > 0 else ""
     output_file = f"results/{tag}_{ds_safe}_s{seed}_t{steps}{suffix}.jsonl"
@@ -325,7 +335,15 @@ def main():
 
     for i, instance in enumerate(instances):
         try:
-            if lang is None or dataset.different_grammar_per_instance:
+            # Vanilla needs no grammar at all.  Building one anyway made the
+            # unconstrained arm inherit rustformlang's compile failures: every
+            # schema whose NFA construction panicked was recorded as a
+            # grammar_build_error and skipped, so the arm that is supposed to
+            # run on *every* instance produced no rows.
+            if not constrain:
+                lang, lex_map, subtokens, prelex = None, None, {}, None
+                additional_stuff = None
+            elif lang is None or dataset.different_grammar_per_instance:
                 lang, lex_map, subtokens = instance.language_lex_subtokens()
                 orig_lex_map = lex_map.copy()
                 lang = lang.concatenate(CFG.from_text("S -> lexFence | $", "S"))
@@ -339,14 +357,39 @@ def main():
                 additional_stuff = None
                 prelex = instance.prelex()
 
-            if additional_stuff is None:
+            if constrain and additional_stuff is None:
                 additional_stuff = preprocessed_generate_stuff(
                     tokenizer, lang, lex_map,
                     prelex=prelex, subtokens=subtokens,
                     strip_chars=instance.strip_chars(),
                 )
-        except Exception as e:
-            print(f"  Skipping {instance.instance_id()}: {e}")
+        except BaseException as e:
+            # rustformlang surfaces regex failures as pyo3_runtime.PanicException,
+            # which derives from BaseException, not Exception -- so `except
+            # Exception` let it escape and killed the whole chunk at its first
+            # unsupported schema.  Six of nine shards produced no output at all.
+            # Record the instance as a failure so it is counted rather than
+            # silently dropped, then carry on.
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            print(f"  Skipping {instance.instance_id()}: {type(e).__name__}: {e}")
+            result = {
+                "instance_id": instance.instance_id(),
+                "method": "igcd" if constrain else "vanilla",
+                "valid": False,
+                "extracted": None,
+                "autocompletion": None,
+                "time_taken": None,
+                "resamples": 0,
+                "timed_out": True,
+                "timed_out_reason": f"grammar_build_error: {type(e).__name__}",
+            }
+            _sch = getattr(instance, "data", None)
+            if isinstance(_sch, dict) and _sch.get("schema") is not None:
+                result["schema"] = _sch["schema"]
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_file, "a") as f:
+                print(json.dumps(result), flush=True, file=f)
             continue
 
         prompt_ids, prompt_len, suffix_str, start_line, prompt_raw = (
@@ -359,40 +402,29 @@ def main():
 
         out = None
         resamples = []
-<<<<<<< HEAD
-        valid = False
+        grammar_complete = False
         signal.signal(signal.SIGALRM, _timeout_handler)
         signal.alarm(instance_timeout)
-        try:
-            for out, resamples, valid in generate_timed(
-                model, prompt_ids, tokenizer,
-                constraint_lang=lang, lex_map=lex_map,
-                prompt_len=prompt_len,
-                steps=steps, gen_length=256, block_length=32,
-=======
-        grammar_complete = False
         try:
             for out, resamples, grammar_complete in generate_timed(
                 model, prompt_ids, tokenizer,
                 constraint_lang=lang, lex_map=lex_map,
                 prompt_len=prompt_len,
                 steps=steps, gen_length=_GEN_LEN, block_length=32,
->>>>>>> c21003171d7d41c33f7d34fcdeafb588b327ff1f
                 temperature=0.2, remasking="low_confidence",
                 prelex=prelex, subtokens=subtokens,
                 strip_chars=instance.strip_chars(),
                 additional_stuff=additional_stuff,
-                constrain=True, max_resamples=100,
+                constrain=constrain, max_resamples=100,
             ):
                 pass
-<<<<<<< HEAD
         except InstanceTimeout:
             signal.alarm(0)
             elapsed = time.monotonic() - start_time
             print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: TIMEOUT ({elapsed:.1f}s)")
             result = {
                 "instance_id": instance.instance_id(),
-                "method": "igcd",
+                "method": "igcd" if constrain else "vanilla",
                 "valid": False,
                 "extracted": None,
                 "autocompletion": None,
@@ -404,16 +436,63 @@ def main():
             with open(output_file, "a") as f:
                 print(json.dumps(result), flush=True, file=f)
             continue
+        except torch.cuda.OutOfMemoryError as e:
+            # An OOM used to fall through the generic handler below, which
+            # printed and continued without writing a row and without freeing
+            # the cache.  Both halves were damaging: the instance vanished from
+            # the output so n silently shrank (232 of 368 on jsb_hard), and the
+            # fragmented allocation stayed resident, so the next instances were
+            # more likely to OOM in turn -- the failures came in runs.
+            signal.alarm(0)
+            try:
+                del out
+            except NameError:
+                pass
+            gc.collect()
+            torch.cuda.empty_cache()
+            print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: CUDA OOM")
+            result = {
+                "instance_id": instance.instance_id(),
+                "method": "igcd" if constrain else "vanilla",
+                "valid": False,
+                "extracted": None,
+                "autocompletion": None,
+                "time_taken": None,
+                "resamples": 0,
+                "timed_out": True,
+                "timed_out_reason": f"cuda_oom: {str(e)[:80]}",
+            }
+            _sch = getattr(instance, "data", None)
+            if isinstance(_sch, dict) and _sch.get("schema") is not None:
+                result["schema"] = _sch["schema"]
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_file, "a") as f:
+                print(json.dumps(result), flush=True, file=f)
+            continue
         except Exception as e:
             signal.alarm(0)
+            gc.collect()
+            torch.cuda.empty_cache()
             print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: ERROR {e}")
+            result = {
+                "instance_id": instance.instance_id(),
+                "method": "igcd" if constrain else "vanilla",
+                "valid": False,
+                "extracted": None,
+                "autocompletion": None,
+                "time_taken": None,
+                "resamples": 0,
+                "timed_out": True,
+                "timed_out_reason": f"generate_error: {type(e).__name__}",
+            }
+            _sch = getattr(instance, "data", None)
+            if isinstance(_sch, dict) and _sch.get("schema") is not None:
+                result["schema"] = _sch["schema"]
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_file, "a") as f:
+                print(json.dumps(result), flush=True, file=f)
             continue
         signal.alarm(0)
-=======
-        except Exception as e:
-            print(f"  [{i+1}/{len(instances)}] {instance.instance_id()}: ERROR {e}")
-            continue
->>>>>>> c21003171d7d41c33f7d34fcdeafb588b327ff1f
 
         elapsed = time.monotonic() - start_time
 
@@ -432,7 +511,9 @@ def main():
         autocompletion = None
         ac_time = 0.0
         supertokens_map = derive_supertokens(subtokens) if subtokens else {}
-        if out is not None and not grammar_complete:
+        # Autocompletion is a grammar operation; the unconstrained arm has no
+        # grammar to complete against.
+        if constrain and out is not None and not grammar_complete:
             ac_start = time.perf_counter()
             mask_id = 126336
             mask_decoded = tokenizer.decode(mask_id)
@@ -447,21 +528,33 @@ def main():
             partial_output, first_token_gap, last_token_eos_adj = (
                 partial_output_from_tokens(generated_words, prelex)
             )
-            valid_completion = autocomplete_valid(
-                partial_output=partial_output,
-                first_token_gap=first_token_gap,
-                last_token_eos_adj=last_token_eos_adj,
-                generated_lang=generated_language(
-                    generated_words,
-                    lex_map, lang.get_terminals(),
-                    prelex=prelex, subtokens=subtokens,
-                    supertokens=supertokens_map,
-                    strip_chars=instance.strip_chars(),
-                ),
-                subtokens=subtokens,
-                lex_map=orig_lex_map,
-                constraint_lang=lang,
-            )
+            try:
+                valid_completion = autocomplete_valid(
+                    partial_output=partial_output,
+                    first_token_gap=first_token_gap,
+                    last_token_eos_adj=last_token_eos_adj,
+                    generated_lang=generated_language(
+                        generated_words,
+                        lex_map, lang.get_terminals(),
+                        prelex=prelex, subtokens=subtokens,
+                        supertokens=supertokens_map,
+                        strip_chars=instance.strip_chars(),
+                    ),
+                    subtokens=subtokens,
+                    lex_map=orig_lex_map,
+                    constraint_lang=lang,
+                )
+            except BaseException as e:
+                # Best-effort completion.  It has raised KeyError on lex_map
+                # lookups for pattern properties containing regex metacharacters,
+                # and rustformlang can panic here too; either killed the chunk
+                # and lost every remaining instance.  A failed completion just
+                # means no completion.
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                print(f"  autocomplete failed for {instance.instance_id()}: "
+                      f"{type(e).__name__}: {e}")
+                valid_completion = None
             ac_time = (time.perf_counter() - ac_start) * 1000
             if valid_completion is not None:
                 autocompletion = instance.extract_result(suffix_str + valid_completion)
@@ -472,7 +565,7 @@ def main():
 
         result = {
             "instance_id": instance.instance_id(),
-            "method": "igcd",
+            "method": "igcd" if constrain else "vanilla",
             "dataset": dataset_name,
             "valid": valid,
             "grammar_complete": grammar_complete,

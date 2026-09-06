@@ -45,13 +45,13 @@ behind it. One position at a time is not enough, because a grammar couples the
 positions it constrains and a locally probable fix can eliminate every valid
 completion of the region. \textbf{DPGrammar} decides the violated span as a
 whole. Merging paths that leave the parser in the same state, it runs a Viterbi
-pass over (parser state $\times$ position) pairs and returns in polynomial time
-the likeliest valid assignment in the lattice it expands, with candidates drawn
+pass over (parser state $\times$ position) pairs and returns the likeliest valid assignment in the lattice it expands, in time
+linear rather than exponential in the span length, with candidates drawn
 from the automaton's outgoing edges rather than the model's ranking, so a tighter
 budget costs likelihood and never validity. On JSONSchemaBench \texttt{medium}
 with LLaDA-8B-Instruct, schema validity rises from $91.8\%$ to $96.7\%$ and
-corrective work falls from $33.2$ to $1.2$ remasks per instance, for $3.3$\,s of
-added mean latency spent writing $1.7\times$ the tokens. The margin over the
+hand-backs fall from $33.2$ to $1.2$ per instance, for $3.3$\,s of
+added mean latency spent writing $1.7\times$ the tokens where the layer fires. The margin over the
 unrepaired baseline more than doubles, to $10.3$\,pp, once outputs must carry
 content, and reaches $13.4$\,pp on the hardest split.
 \end{abstract}
@@ -95,7 +95,8 @@ not.
 We introduce \textbf{DPGrammar}, a repair layer that treats a violated region as
 a single decision problem rather than a sequence of independent ones. When the
 parser rejects at the frontier, we identify the affected span and run a Viterbi
-search over a lattice of (parser state $\times$ position) pairs. Deciding an affected region jointly would be exponential in span length if searched over raw token sequences. However, because a path's future valid continuations are determined by its current parser state rather than its prefix, paths arriving at identical parser states can merge into a single search node, reducing the Viterbi pass to time linear in span length. We key states on the token set the parser admits, which merges more aggressively than that argument licenses; \S\ref{sec:dp} measures what the approximation costs. At each node, candidate tokens are drawn from the parser automaton's outgoing edges and ranked by model likelihood, which narrows the search while guaranteeing that no legal token is missed, so a tighter budget costs likelihood and never validity.\footnote{Against a vocabulary of $126{,}349$, a
+search over a lattice of (parser state $\times$ position) pairs. Deciding an affected region jointly would be exponential in span length if searched over raw token sequences. However, because a path's future valid continuations are determined by its current parser state rather than its prefix, paths arriving at identical parser states can merge into a single search node, so the pass costs $O(\text{span}\cdot|S|\cdot k)$ for $|S|$ distinct states per
+layer, linear in the span rather than exponential in it. We key states on the token set the parser admits, which merges more aggressively than that argument licenses; \S\ref{sec:dp} measures what the approximation costs. At each node, candidate tokens are drawn from the parser automaton's outgoing edges and ranked by model likelihood. Every candidate is one the parser will accept, so a tighter budget costs likelihood and never validity.\footnote{Against a vocabulary of $126{,}349$, a
 live parser state admits a median of just $106$ tokens (\S\ref{sec:cand},
 Appendix~\ref{app:legalsets}).} Termination is likewise read off the grammar
 rather than a step count; the layer places no requirement on the unmasking
@@ -130,19 +131,16 @@ and \citet{dang2026fadllm} generalise this to exact sampling from the
 constrained mean-field posterior under arbitrary remasking schedules, restoring
 a hard guarantee. Both require the constraint as a finite automaton, which
 bounds them to regular languages; we trade that guarantee for a context-free
-constraint language and a schedule-agnostic layer. \citet{cardei2025constraineddiscretediffusion} likewise prevent rather than
-repair, but through a differentiable projection applied inside the sampling loop
-rather than through an automaton, which reaches constraints that admit a
-continuous relaxation, such as lexical inclusion or molecular validity; grammar
-membership is a discrete predicate over the token sequence and is the case a
-parser handles directly. LAVE
+constraint language and a schedule-agnostic layer. \citet{cardei2025constraineddiscretediffusion} also prevent rather than repair,
+by a differentiable projection inside the sampling loop, which reaches
+constraints admitting a continuous relaxation but not grammar membership, a
+discrete predicate a parser handles directly. LAVE
 \citep{zhang2026lookaheadthenverifyreliableconstraineddecoding} verifies each
 frontier token by sampling $K$ random completions, accepting only if one is
-grammar-valid; it is the strongest published baseline we are able to run, and the diffusion
-member of the lookahead-then-verify family, whose $K$ roll-outs per token
-\citet{nakshatri2025speculative} make cheaper in the AR setting by drafting them
-with a smaller model. Plan-style decoders
-\citep{li2026planverifyfillstructured} emphasise structure-aware planning. In contrast, we maintain a lightweight incremental parser at the token level, triggering joint search where parsing conflicts arise.
+grammar-valid; it is the strongest published baseline we can run, and
+\citet{nakshatri2025speculative} make the same $K$ roll-outs cheaper in the AR
+setting with a draft model. Plan-style decoders
+\citep{li2026planverifyfillstructured} emphasise structure-aware planning.
 
 \paragraph{Viterbi decoding for non-AR models.}
 Lattice search is well established in non-autoregressive generation \citep{deng2021sequence}: \citet{shao2022viterbi} apply Viterbi decoding over Directed Acyclic Transformers and Control-DAG \citep{chen2024controldag} enforces lexical constraints with weighted finite-state automata. Both search a model-defined lattice in which output length must be constrained, or an unnormalised likelihood favours trivially short paths. Ours is defined by the parser and bounded by the violated span, so length is fixed rather than searched and the length-control term those methods need has nothing to correct, which \S\ref{sec:ablation} measures.
@@ -173,11 +171,7 @@ its right was sampled with no constraint at all.
 Those positions are not provisional. Masked diffusion is \emph{carry-over
 unmasking} \citep{sahoo2024simple,shi2024simplified}: the reverse posterior
 copies any already-revealed position unchanged, so a step only ever replaces
-$\textsc{mask}$ symbols,
-\[
-x_0 \;\leftarrow\; \mathbf{1}[\text{mask}]\odot x_0 \;+\; (1-\mathbf{1}[\text{mask}])\odot x ,
-\]
-which is what LLaDA's reference sampler implements. (Samplers that deliberately
+$\textsc{mask}$ symbols, which is what LLaDA's reference sampler implements. (Samplers that deliberately
 remask revealed positions relax the property; we do not assume one.) Tokens
 placed beyond the frontier are therefore immutable commitments. As the remaining
 masks fill in, the parser advances across the newly contiguous region and may
@@ -205,7 +199,9 @@ not ours. The depth test is the part that matters: without it the span can end
 inside an unclosed array or object, where the cheapest legal continuation is the
 closing bracket, and the joint solve then collapses the rest of the structure to
 \texttt{[]} or \texttt{\{\}}, the degeneracy \S\ref{sec:results} measures with
-the content floor. Appendix~\ref{app:legalsets} reports which of the three binds
+the content floor. Bracket depth is the JSON instance of a general requirement, that a span end
+where the grammar can resynchronise; another constraint family would need its own
+test. Appendix~\ref{app:legalsets} reports which of the three binds
 in practice, and how long the resulting spans are.
 
 Over that span we seek the assignment $y$ maximising
@@ -287,8 +283,9 @@ distinct keys $|S|$, giving $O(\text{span}\cdot|S|\cdot k)$ parser
 operations and $O(|S|)$ live parsers. The key
 $\kappa(q)=\texttt{bytes}(\mathcal{L}(q))$ is the parser's own mask, which
 line~5 already computed to build $C$, so the merge costs no parser call of its
-own. Since $|S|$ stays in the single digits in
-practice, span length stops being an exponent in either time or memory.
+own. Nothing bounds $|S|$ a priori, it being the number of distinct masks the grammar
+can present at one position, but it stays in the single digits across our runs,
+and span length is no longer an exponent whatever it is.
 
 \paragraph{What merging costs.}
 $\kappa$ is a state \emph{abstraction}, not a state identifier: two states can
@@ -303,6 +300,8 @@ survivor dead-ends first the span ends early, which Algorithm~\ref{alg:dp}
 treats as finishing rather than failing.
 Appendix~\ref{app:api} measures that cost by widening the merge, and finds it
 changes the returned assignment at $0.33\%$ of solves.
+Appendix~\ref{app:properties} states separately what the search guarantees, what
+it assumes, and what each approximation costs.
 
 \begin{algorithm}[t]
 \caption{Joint repair of a violated span}
@@ -311,26 +310,26 @@ changes the returned assignment at $0.33\%$ of solves.
 \Require violator $v$, span end $e$, parser state $q_v$, log-probabilities
 $\log p_\theta$, candidate budget $k$
 \Ensure an assignment over $[v,e')$, $e'\!\le\!e$, that the parser accepts from $q_v$
-\State $S \gets \{\,\kappa(q_v)\mapsto(q_v,\,0)\,\}$ \Comment{state key $\mapsto$ (parser, score)}
+\State $S \gets \{\,\kappa(q_v)\mapsto(q_v,\,0)\,\}$; \;\; $B \gets \emptyset$ \Comment{key $\mapsto$ (parser, score); back-pointers}
 \For{$p = v$ \textbf{to} $e-1$}
   \State $W \gets \emptyset$ \Comment{best incoming path per successor state}
-  \ForAll{$(q,s) \in S$}
+  \ForAll{$(\kappa,(q,s)) \in S$}
     \State $C \gets \text{the } k \text{ most probable tokens of } \mathcal{L}(q)\setminus\{\textsc{eos}\}$ \Comment{\S\ref{sec:cand}}
     \State $C \gets C \cup \{x_p\}$ if $x_p \in \mathcal{L}(q)$ \Comment{keep the model's own token reachable}
     \ForAll{$t \in C$}
       \State advance $q$ by $t$; \; $\kappa' \gets \kappa(q)$; \; $s' \gets s + \log p_\theta(t)_p$
       \State \textbf{rollback} $q$ one token \Comment{probe without copying}
       \If{$\kappa' \notin W$ \textbf{or} $s' > \operatorname{score}(W[\kappa'])$}
-        \State $W[\kappa'] \gets (q,\,t,\,s')$ \Comment{\textbf{merge}: paths reaching $\kappa'$ collapse to the best one}
+        \State $W[\kappa'] \gets (\kappa,\,q,\,t,\,s')$ \Comment{\textbf{merge}: paths reaching $\kappa'$ collapse to the best one}
       \EndIf
     \EndFor
   \EndFor
   \If{$W = \emptyset$}
     \State \textbf{break} \Comment{nothing consumable: the span ends here, it does not fail}
   \EndIf
-  \State $S \gets \{\,\kappa' \mapsto (\textbf{clone}(q)\text{ advanced by }t,\; s') \;:\; (\kappa',(q,t,s')) \in W\,\}$
+  \State $S \gets \{\,\kappa' \mapsto (\textbf{clone}(q)\text{ advanced by }t,\; s')\,\}$ and $B[p,\kappa'] \gets (\kappa,t)$, for each $(\kappa',(\kappa,q,t,s')) \in W$
 \EndFor
-\State \Return the backtrace from $\arg\max_{q\in S}\operatorname{score}(q)$
+\State \Return the tokens on the path $B$ traces back from $\arg\max_{\kappa\in S}\operatorname{score}(\kappa)$
 \end{algorithmic}
 \end{algorithm}
 
@@ -375,11 +374,10 @@ binds.
 
 \paragraph{Datasets.}
 JSONSchemaBench~\citep{geng2025jsonschemabenchrigorousbenchmarkstructured}
-supplies JSON schemas without reference answers, in three difficulty splits:
-\texttt{easy} and \texttt{medium} ($586$ instances each) and \texttt{hard}
-($368$). Schemas that \textsc{llguidance} cannot compile are excluded from every
-arm, since no method runs on them: $28$, $75$, and $99$ respectively, leaving
-$n=558$, $511$, $269$. JSON-Mode-Eval supplies prompts paired with a schema \emph{and} a reference
+supplies JSON schemas without reference answers, in three difficulty splits of
+$577$, $586$ and $368$ instances. \textsc{llguidance} implements a large subset of JSON Schema, and a schema it
+cannot compile is excluded from every arm since no method runs on it: $19$, $75$ and $99$ respectively,
+leaving $n=558$, $511$, $269$. JSON-Mode-Eval supplies prompts paired with a schema \emph{and} a reference
 completion; we use the $272$-instance extension
 \citep{ethsri2025jsonmodeevalextended} of the original $100$-row
 release~\citep{nousresearch2024jsonmodeeval}, as released with CD-CFG.
@@ -394,8 +392,10 @@ Appendix~\ref{app:config} lists the remaining constants.
 \emph{Vanilla} is the same decoder with no constraint of any kind, and marks
 what the backbone produces unaided. \emph{CD-CFG} \citep{cd4dllm} is run from the
 authors' released implementation, which builds its constraint with
-\textsc{rustformlang}, the formal-language library that ships with it; \S\ref{sec:coverage}
-treats the resulting coverage difference separately. \emph{LAVE}
+\textsc{rustformlang}, the formal-language library that ships with it, and scored
+with that code's \texttt{autocomplete\_valid} post-processing, the configuration
+its authors ship; \S\ref{sec:coverage} treats the coverage difference separately
+and reports what the post-processing is worth. \emph{LAVE}
 \citep{zhang2026lookaheadthenverifyreliableconstraineddecoding} is likewise run
 from its authors' released code, instrumented only to record per-operation
 timing, under a $120$\,second per-instance cap that applies to every arm and
@@ -414,12 +414,12 @@ inference.
 
 \paragraph{Metrics.}
 Three quality metrics. \emph{schema@1} is validation against the instance's own
-schema under \texttt{jsonschema}. \emph{content} additionally requires five
-scalar leaves, since validity alone cannot separate an empty structure from a
+schema under \texttt{jsonschema}. \emph{content} additionally requires five \emph{populated leaves}, the scalar values anywhere in the document, since
+validity alone cannot separate an empty structure from a
 populated one; Table~\ref{tab:main} sweeps the threshold and
 Appendix~\ref{app:example} shows a pair the two order differently.
 \emph{functional@1} requires a match against the reference completion, so it is
-JSON-Mode-Eval only. Two cost metrics: corrective work per instance
+JSON-Mode-Eval only. Two cost metrics: hand-backs per instance
 (\emph{rs/inst}, defined with Table~\ref{tab:difficulty}) and wall-clock latency,
 reported as mean, p50, p95 and p99 with timeouts at a $120$\,s cap.
 
@@ -434,9 +434,10 @@ reported as mean, p50, p95 and p99 with timeouts at a $120$\,s cap.
 the instances its own toolchain compiles, so $n$ differs: LAVE, no-DP and DPG
 share the \textsc{llguidance} set exactly, while $\dagger$ marks CD-CFG, whose
 \textsc{rustformlang} front-end accepts a smaller subset (Appendix~\ref{sec:coverage}). Times are in
-seconds and TO counts the $120$\,s cap. rs/inst is corrective work per instance,
-whose unit differs by arm (remasks, lookahead draws, rejected candidates), so
-only no-DP and DPG compare there. DPG is DPGrammar.}
+seconds and TO counts the $120$\,s cap. rs/inst counts positions handed back to
+the sampler per instance; its unit differs by arm (remasks, lookahead draws,
+rejected candidates), so only no-DP and DPG compare there. It does not count tokens the joint search rewrites (\S\ref{sec:results}).
+DPG is DPGrammar.}
 \label{tab:difficulty}
 \begin{tabular}{llrrrrrrrrr}
 \toprule
@@ -444,21 +445,21 @@ Split & Method & $n$ & schema@1\,$\uparrow$ & content\,$\uparrow$ & mean\,$\down
 \midrule
 \multirow{5}{*}{\texttt{easy}}
  & Vanilla           & $577$ & $62.9$ & $30.2$ & $8.34$  & $8.37$  & $11.23$  & $14.98$  & $0$ & --- \\
- & CD-CFG$^\dagger$  & $449$ & $56.3$ & $28.1$ & $6.22$  & $6.72$  & $11.54$  & $15.98$  & $0$ & $49.2$ \\
+ & CD-CFG$^\dagger$  & $449$ & $79.1$ & $36.3$ & $6.22$  & $6.72$  & $11.54$  & $15.98$  & $0$ & $49.2$ \\
  & LAVE              & $558$ & $80.1$ & $40.5$ & $30.63$ & $6.71$  & $120.01$ & $120.01$ & $94$ & $207.3$ \\
  & no-DP (ours)      & $558$ & $97.5$ & $45.2$ & $7.58$  & $7.58$  & $\mathbf{11.47}$ & $\mathbf{15.09}$ & $\mathbf{0}$ & $20.7$ \\
  & DPG (ours)        & $558$ & $\mathbf{97.7}$ & $\mathbf{49.3}$ & $\mathbf{5.31}$ & $\mathbf{3.40}$ & $15.11$ & $29.06$ & $\mathbf{0}$ & $\mathbf{0.6}$ \\
 \midrule
 \multirow{5}{*}{\texttt{medium}}
  & Vanilla           & $586$ & $49.8$ & $47.1$ & $14.89$ & $14.36$ & $21.82$  & $31.67$  & $0$ & --- \\
- & CD-CFG$^\dagger$  & $383$ & $44.1$ & $41.0$ & $22.71$ & $14.16$ & $112.24$ & $120.00$ & $19$ & $57.3$ \\
+ & CD-CFG$^\dagger$  & $383$ & $64.8$ & $58.0$ & $22.71$ & $14.16$ & $112.24$ & $120.00$ & $19$ & $57.3$ \\
  & LAVE              & $511$ & $78.3$ & $74.0$ & $38.50$ & $25.70$ & $120.00$ & $120.01$ & $60$ & $253.5$ \\
  & no-DP (ours)      & $511$ & $91.8$ & $74.6$ & $\mathbf{13.45}$ & $\mathbf{13.40}$ & $\mathbf{21.43}$ & $\mathbf{29.99}$ & $\mathbf{0}$ & $33.2$ \\
  & DPG (ours)        & $511$ & $\mathbf{96.7}$ & $\mathbf{84.9}$ & $16.75$ & $15.05$ & $36.21$ & $63.24$ & $\mathbf{0}$ & $\mathbf{1.2}$ \\
 \midrule
 \multirow{5}{*}{\texttt{hard}}
  & Vanilla           & $368$ & $20.7$ & $20.4$ & $44.64$ & $35.43$ & $103.48$ & $120.00$ & $4$ & --- \\
- & CD-CFG$^\dagger$  & $245$ & $11.4$ & $10.6$ & $57.61$ & $41.53$ & $120.00$ & $120.15$ & $72$ & $50.2$ \\
+ & CD-CFG$^\dagger$  & $245$ & $32.2$ & $29.8$ & $57.61$ & $41.53$ & $120.00$ & $120.15$ & $72$ & $50.2$ \\
  & LAVE              & $269$ & $39.8$ & $39.4$ & $40.47$ & $38.35$ & $120.00$ & $120.00$ & $30$ & $115.8$ \\
  & no-DP (ours)      & $269$ & $74.3$ & $53.9$ & $\mathbf{31.41}$ & $\mathbf{26.69}$ & $\mathbf{61.91}$ & $\mathbf{101.51}$ & $\mathbf{0}$ & $56.0$ \\
  & DPG (ours)        & $269$ & $\mathbf{87.7}$ & $\mathbf{71.7}$ & $42.66$ & $35.24$ & $96.58$ & $115.96$ & $2$ & $\mathbf{1.5}$ \\
@@ -488,16 +489,18 @@ $\wedge\ \kappa{=}15$ & $33.7$ & $29.5$ & $\mathbf{35.0}$ & $+5.5$  & $+1.3$ \\
 
 Repair pays in proportion to how jointly the grammar constrains a region, and
 schema validity hides most of what it pays. On \texttt{medium} the layer lifts
-validity by $4.9$\,pp over the unrepaired baseline while cutting corrective work
-by $28\times$, from $33.2$ to $1.2$ remasks per instance. Two trends say more
-than that headline does. Raising the content floor doubles the margin, from
+validity by $4.9$\,pp over the unrepaired baseline while cutting hand-backs by
+$28\times$, from $33.2$ to $1.2$ per instance. Hand-backs are not the whole of
+the corrective work: in their place the layer runs $0.62$ joint solves per
+instance and rewrites $3.0$ tokens, so the positions it touches fall from $33.2$
+to $4.2$: eight rather than twenty-eight. Two trends say more than the headline. Raising the content floor doubles the margin, from
 $+4.9$ to $+10.3$\,pp at five populated leaves and $+11.5$ at three
 (Table~\ref{tab:main}), because single-token repair takes the cheapest legal
 token at a violation and a closing bracket usually is one: the document collapses
 exactly where the joint solve would have continued it. Raising the difficulty
-does the same and monotonically, by $+0.2$, $+4.9$ and $+13.4$\,pp of validity
-and $+4.1$, $+10.3$ and $+17.8$\,pp of content across \texttt{easy},
-\texttt{medium} and \texttt{hard}, which is what joint repair predicts: violations
+does the same, by $+0.2$, $+4.9$ and $+13.4$\,pp of validity and $+4.1$, $+10.3$
+and $+17.8$\,pp of content across \texttt{easy}, \texttt{medium} and
+\texttt{hard}, the first a single instance, which is what joint repair predicts: violations
 become more joint as schemas acquire nesting, required-property ordering and
 cross-field constraints. Against LAVE the shape inverts, narrowing from $+18.4$
 to $+1.3$\,pp as the floor rises, because LAVE never rewrites and its surviving
@@ -505,29 +508,21 @@ documents were never at risk of collapsing. Against LAVE we buy frequency;
 against the unrepaired baseline we buy content (Appendix~\ref{app:example}).
 
 That margin is not bought with time, and it does not depend on which instances
-each arm is scored on. The constraint machinery costs what no-DP's does, $909$ against $920$\,ms, so the
-$3.3$\,s is not the search but the decoding the repair makes possible: a repaired
-document keeps going where no-DP stops, and per token emitted the cost rises by
-$15\%$ where the total rises by $96\%$ (Appendix~\ref{app:workload}). That
-brevity is premature termination rather than economy, and the content floor
-scores it as the failure it is: $18.8\%$ of no-DP's valid \texttt{medium} outputs
-carry fewer than five leaves against $12.1\%$ of ours. Where repair is unnecessary the ordering reverses outright, and on
-\texttt{easy} DPGrammar is faster in both mean and median. The tail does grow,
+each arm is scored on. The constraint machinery costs what no-DP's does, so the $3.3$\,s is not the
+search but the decoding the repair makes possible: a repaired document keeps
+going where no-DP stops, and where it fires the total rises by $96\%$ but the
+cost per token emitted by only $15\%$ (Appendix~\ref{app:workload}). That brevity is premature termination rather than economy: $18.8\%$ of no-DP's valid \texttt{medium} outputs
+carry fewer than five leaves against $12.1\%$ of ours. On \texttt{easy}, where repair is rarely needed, DPGrammar is the faster arm. The tail does grow,
 from $21.4$ to $36.2$\,s at p95, and two \texttt{hard} instances reach the cap
-where no-DP reaches none. Restricting each comparison to a shared
-population leaves the ordering unchanged, whether that population is the $351$
-schemas both toolchains compile or the $451$ instances LAVE finishes within the
-cap (Appendix~\ref{sec:coverage}).
+where no-DP reaches none. The ordering is unchanged on a shared population, whether the $351$ schemas both
+toolchains compile or the $451$ instances LAVE finishes within the cap (Appendix~\ref{sec:coverage}).
 
 The content margin survives a change of schedule and grows where the schedule is
 harder: $+13.1$\,pp when the whole sequence is committed in one block rather than
 in blocks of $32$, and $+17.2$ when positions are revealed in random order rather
-than by confidence, against $+10.4$ here. The validity margin travels less
-evenly, from $+15.1$ under the first to $+0.4$ under the second, and what it
-tracks is the step budget rather than the search. Random order produces
-$2.3\times$ the violations, repairing them costs denoising steps, and $46\%$ of
-instances then exhaust the $128$-step schedule before the document closes, which
-is $98\%$ of what DPGrammar fails on there; the search itself dead-ends once in
+than by confidence, against $+10.3$ here. The validity margin travels less
+evenly, from $+15.1$ under the first to $+0.4$ under the second, and it tracks the step budget, not the search. Random order produces
+$2.3\times$ the violations, repairing them costs denoising steps, and $46\%$ of instances exhaust the $128$-step schedule before the document closes, $98\%$ of what DPGrammar fails on there; the search itself dead-ends once in
 $733$ calls (Appendix~\ref{app:schedules}).
 
 Not every residual failure is a failure of the search. \textsc{llguidance} pins
@@ -535,7 +530,7 @@ an object's properties to their declaration order, so a model that writes them i
 another order produces a violation \texttt{jsonschema} would not call an error at
 all, and whose correct repair is a movement rather than a substitution, which a
 positional DP cannot express. This accounts for $6.6\%$ of the $1{,}106$
-violations the reported run records, and for $22\%$ of the $120$ that arise where
+violations the reported run records, and for $50\%$ of the $120$ that arise where
 the grammar admits a single token, the states in which the search has no
 alternative to write (Appendix~\ref{app:ordering}). It is a limit of overwriting
 in place rather than of solving the span jointly.
@@ -554,29 +549,27 @@ output to match the reference completion.}
 \toprule
  & Vanilla & CD-CFG & LAVE & no-DP & \textbf{DPGrammar} \\
 \midrule
-schema@1\,$\uparrow$     & $85.3$ & $92.6$ & $\mathbf{98.2}$ & $97.4$ & $\mathbf{98.2}$ \\
-functional@1\,$\uparrow$ & $48.5$ & $52.6$ & $\mathbf{53.7}$ & $\mathbf{53.7}$ & $52.6$ \\
+schema@1\,$\uparrow$     & $85.3$ & $97.8$ & $\mathbf{98.2}$ & $97.4$ & $\mathbf{98.2}$ \\
+functional@1\,$\uparrow$ & $48.5$ & $52.9$ & $\mathbf{53.7}$ & $\mathbf{53.7}$ & $52.6$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Constraining structure does not buy semantics. JSON-Mode-Eval is where the two
-separate, since it pairs each prompt with a reference completion: every
-constrained arm gains $7$ to $13$\,pp of schema validity over Vanilla while
-functional@1 stays inside a $5$\,pp band. The layer itself has little to do here,
-because no-DP already validates $97.4\%$ of these instances, so the joint search
+separate, since it pairs each prompt with a reference completion: every constrained arm gains $12$ to $13$\,pp of schema validity over Vanilla
+while functional@1 stays inside $5.2$\,pp. The layer has little to do here: no-DP already validates $97.4\%$ of these instances, so the joint search
 fires on $14$ of $272$ and the two arms agree byte for byte on $256$. What
 separates their functional@1 is five instances, one in our favour and four
-against, which an exact McNemar test places inside noise ($p=0.38$). The
-$1.1$\,pp gap measures this sample rather than what rewriting costs an answer;
-\S\ref{sec:results} is where the layer runs under joint-constraint load.
+against, which an exact McNemar test places inside noise ($p=0.38$).
+On those $14$ the layer takes schema@1 from $12$ to $14$, rewriting $5.1$ tokens
+over $16$ solves, and moves functional@1 by one win against two losses. The gap measures this sample, not what rewriting costs an answer;
+\S\ref{sec:results} runs the layer under joint-constraint load.
 
 \paragraph{What prevention would have cost.}
 Prevention buys its guarantee three times over. Run on the same backbone and
-schedule, exact inference over the constrained posterior reaches a third fewer
+schedule, exact inference over the constrained posterior reaches a quarter fewer
 schemas than the incremental parser, is three to five times slower, and returns a
-median of one scalar leaf against our thirteen. That last is the content floor
-again, from the other side: the smallest document a schema admits is both valid
+median of one scalar leaf against our thirteen. That last is the content floor from the other side: the smallest document a schema admits is both valid
 and cheap, so a decoder optimising probability under a hard constraint is drawn
 to it (Appendix~\ref{app:prevention}).
 
@@ -591,7 +584,8 @@ to it (Appendix~\ref{app:prevention}).
 \texttt{medium} with one seed. The upper block changes what the search ranges
 over; the merge width is measured on the search itself rather than end to end
 (\S\ref{sec:dp}). The lower block changes the objective or the admission rule and
-leaves schema@1 where it is.}
+leaves schema@1 where it is. One-char string leaves are the share of an output's
+string leaves that hold a single character, averaged over outputs.}
 \label{tab:ablation}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llc@{}}
@@ -599,27 +593,25 @@ leaves schema@1 where it is.}
 Component & Varied & Measured effect \\
 \midrule
 Candidate source     & vocabulary top-$k$ $\to$ automaton & schema@1 $95.5\to96.7$; dead ends $23.3\to1.0\%$ \\
-Repair window        & single token $\to$ full span       & 1-char leaves $12.3\%\to7.9\%$ \\
+Repair window        & single token $\to$ full span       & one-char string leaves $12.3\to7.9\%$ \\
 Paths kept per key   & $1 \to 4$                          & assignment changes at $0.33\%$ of solves \\
 \midrule
 Objective            & $\log p$ $\to$ min-edit            & $-0.5$ edits, $93.9\%$ identical \\
 Candidate admission  & always admit committed token       & none (identical output) \\
-Stop tokens          & excluded $\to$ kept in $\mathcal{C}$ & $99.7\%$ identical; $48\times$ futile probes \\
+Stop tokens          & excluded $\to$ kept in $\mathcal{C}$ & $99.6\%$ identical; $48\times$ futile probes \\
 Post-hoc enrichment  & on $\to$ off                       & none (identical output) \\
 Edit penalty & $\lambda\in\{0,2\}$ & none (never non-zero) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-We vary one component at a time, holding backbone, seed and schedule fixed, so
-what follows is evidence about this configuration rather than a law. Three
-effects the table cannot show are worth stating. Filtering the vocabulary after
-sampling abandons $273$ positions that the edge set recovers, and the three dead
-ends the edge set does produce are not proposal misses: they are states admitting
-nothing but a stop token, the one case $\mathcal{C}$ is empty by design.
+We vary one component at a time, holding backbone, seed and schedule fixed, so what follows is evidence about this configuration, not a law. Three effects
+the table cannot show are worth stating. Filtering the vocabulary after
+sampling abandons $273$ positions the edge set recovers, and the three dead ends it does
+produce are not proposal misses but states admitting nothing but a stop token, the one case $\mathcal{C}$ is empty by design.
 Minimum-edit attributes $90\%$ of what the DP rewrites to the grammar rather than
-to the objective. And the edit penalty stays at zero although it is the
-correction Viterbi decoders for non-autoregressive models need to stop an
+to the objective. And the edit penalty stays at zero although Viterbi decoders for
+non-autoregressive models need it to stop an
 unnormalised objective collapsing toward short
 paths~\citep{shao2022viterbi,chen2024controldag}: our span is fixed by the
 violation rather than chosen by the search, so there is no collapse to prevent.
@@ -649,8 +641,8 @@ Our results are one backbone, one seed and one constraint family, and the last o
 those bounds more than the numbers: a constraint whose states are harder to tell
 apart by their legal-token sets would pay more for the state key than the
 $0.33\%$ we measure here (\S\ref{sec:dp}). The layer also earns nothing where
-violations are local rather than joint, and on SMILES the joint search seldom
-fires at all; that is the difficulty gradient read at its other
+violations are local rather than joint: across $64$ SMILES instances the single-token retry absorbed all $9$ violations
+the parser raised, so the joint search never ran; that is the difficulty gradient read at its other
 end, but it leaves the boundary between those grammars and JSON Schema unmapped,
 and other backbones and constraint families would place it.
 

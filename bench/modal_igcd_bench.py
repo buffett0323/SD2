@@ -38,20 +38,27 @@ RESULTS_VOL = modal.Volume.from_name("dgrammar-results", create_if_missing=True)
 
 @app.function(
     image=image,
-    gpu="A100",
+    # A100-80GB, not the 40GB default.  On jsb_hard the schema pushes prompts to
+    # ~5.5k tokens, and the reference sampler's `logits.to(torch.float64)` for
+    # the confidence softmax turns a 2.6 GiB fp32 logits tensor into a 5.2 GiB
+    # fp64 one, plus the softmax output.  At 40GB that OOMs on ~40% of hard
+    # instances.  Doubling the card leaves the arm's numerics untouched, which
+    # matters because this is a published baseline we run as released.
+    gpu="A100-80GB",
     timeout=7200,
     volumes={"/results": RESULTS_VOL},
 )
 def run_chunk(seed: int, limit: int, offset: int, steps: int,
-              dataset: str = "jsonschema", instance_timeout: int = 120):
+              dataset: str = "jsonschema", instance_timeout: int = 120, constrain: bool = True):
     import subprocess
     import shutil
     import os
 
     ds_safe = dataset.replace("/", "_")
     suffix = f"_off{offset}" if offset > 0 else ""
-    local_file = f"/root/results/igcd_timed_{ds_safe}_s{seed}_t{steps}{suffix}.jsonl"
-    out_file = f"/results/igcd_timed_{ds_safe}_s{seed}_t{steps}{suffix}.jsonl"
+    pfx = "igcd" if constrain else "vanilla"
+    local_file = f"/root/results/{pfx}_timed_{ds_safe}_s{seed}_t{steps}{suffix}.jsonl"
+    out_file = f"/results/{pfx}_timed_{ds_safe}_s{seed}_t{steps}{suffix}.jsonl"
 
     if os.path.exists(out_file):
         os.remove(out_file)
@@ -60,7 +67,7 @@ def run_chunk(seed: int, limit: int, offset: int, steps: int,
         [
             "python", "/root/run_igcd_timed.py",
             str(seed), str(limit), dataset, str(steps), str(offset),
-            str(instance_timeout),
+            str(instance_timeout), "1" if constrain else "0",
         ],
         capture_output=True,
         text=True,
@@ -92,6 +99,7 @@ def main(
     chunks: int = 2,
     dataset: str = "jsonschema",
     instance_timeout: int = 120,
+    constrain: bool = True,
 ):
     chunk_size = (total + chunks - 1) // chunks
     print(f"Running IG-CD timed on {chunks}x A100: {dataset}, seed={seed}, T={steps}, timeout={instance_timeout}s")
@@ -104,7 +112,7 @@ def main(
         if limit <= 0:
             break
         print(f"  Chunk {i}: offset={offset}, limit={limit}")
-        handles.append(run_chunk.spawn(seed, limit, offset, steps, dataset, instance_timeout))
+        handles.append(run_chunk.spawn(seed, limit, offset, steps, dataset, instance_timeout, constrain))
 
     for i, handle in enumerate(handles):
         result = handle.get()

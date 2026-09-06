@@ -52,14 +52,25 @@ RESULTS_VOL = modal.Volume.from_name("dgrammar-results", create_if_missing=True)
 
 @app.function(
     image=image,
-    gpu="A100",
+    # A100-80GB.  On jsb_hard the schema pushes prompts past 5k tokens and the
+    # confidence softmax is taken in fp64, so a 40GB card OOMs part-way: 105 of
+    # 269 DPGrammar instances and 63 of 269 no-DP ones died that way, and
+    # because the DP layer holds more state it was penalised harder than the
+    # baseline it is compared against.  The margin that produced was an
+    # artifact of unequal OOM rates, not of repair.
+    gpu="A100-80GB",
     timeout=7200,
     volumes={"/results": RESULTS_VOL},
 )
 def run_chunk(seed: int, limit: int, offset: int, steps: int, block_ar: int = 1,
               dataset: str = "jsonschema", method: str = "dgrammar",
-              instance_ids: str = "", deviation_penalty: float = 0.0, tag: str = "",
-              gen_length: int = 256, min_complete_frac: float = 0.0):
+              instance_ids: str = "", tag: str = "",
+              gen_length: int = 256,
+              oracle: bool = False, window_mode: str = "full",
+              objective: str = "logp", cand_source: str = "automaton",
+              eos_in_candidates: bool = False,
+              top_k_dp: int = 100, max_lookahead: int = 48,
+              remasking: str = "low_confidence"):
     import subprocess
     import shutil
     import os
@@ -79,10 +90,16 @@ def run_chunk(seed: int, limit: int, offset: int, steps: int, block_ar: int = 1,
         str(seed), str(limit), dataset, str(steps), str(offset),
         str(block_ar), method,
         instance_ids,           # argv[8]: may be empty string
-        str(deviation_penalty), # argv[9]
-        tag,                    # argv[10]: optional filename tag suffix
-        str(gen_length),          # argv[11]: generation length (default 256)
-        str(min_complete_frac),   # argv[12]: min fraction of steps before complete=True (default 0)
+        tag,                      # argv[9]:  optional filename tag suffix
+        str(gen_length),          # argv[10]: generation length (default 256)
+        "1" if oracle else "0",   # argv[11]: run the unfrozen-prefix oracle probe
+        window_mode,              # argv[12]: "full", "progressive", "descend", "wN"
+        objective,                # argv[13]: "logp" or "min_edit"
+        cand_source,              # argv[14]: "automaton" or "vocab"
+        "1" if eos_in_candidates else "0",   # argv[15]
+        str(top_k_dp),            # argv[16]: candidate budget k per lattice node
+        str(max_lookahead),       # argv[17]: span budget L, the forward-scan cap
+        remasking,                # argv[18]: which masked position a step reveals
     ]
 
     result = subprocess.run(
@@ -119,10 +136,16 @@ def main(
     dataset: str = "jsonschema",
     method: str = "dgrammar",
     instance_ids: str = "",
-    deviation_penalty: float = 0.0,
     tag: str = "",
     gen_length: int = 256,
-    min_complete_frac: float = 0.0,
+    oracle: bool = False,
+    window_mode: str = "full",
+    objective: str = "logp",
+    cand_source: str = "automaton",
+    eos_in_candidates: bool = False,
+    top_k_dp: int = 100,
+    max_lookahead: int = 48,
+    remasking: str = "low_confidence",
 ):
     """
     --method dgrammar   original greedy violation-retry (default)
@@ -131,24 +154,49 @@ def main(
                         (e.g. --instance-ids o33928,o12618,o70379)
                         When set, runs as a single chunk ignoring total/chunks.
     --tag TAG           append _TAG to the output filename to avoid overwriting
-                        the main results (e.g. --tag debug, --tag devpen3)
+                        the main results (e.g. --tag debug)
     --gen-length N      generation length in tokens (default 256; use 512 for
                         schemas that need longer output)
-    --min-complete-frac F  earliest fraction of steps at which complete=True is
-                        allowed (0.0=default, 1.0=force all 128 steps)
+    --oracle            at each repair site, re-run the DP with the prefix
+                        unfrozen and record whether the better answer was
+                        reachable at all. Measurement only; the generated output
+                        is identical with or without it.
+    --objective {logp,min_edit}
+                        `logp` maximises summed log-probability over the repair
+                        span, which rewrites positions the grammar never
+                        objected to -- 5.95 of a 14-position span on a pilot,
+                        where only the violator was illegal.  `min_edit` orders
+                        candidates by how many of the model's tokens they change
+                        first, so the repair touches only what the grammar
+                        forces.
+    --remasking {low_confidence,random}
+                        which masked position a step reveals. `low_confidence`
+                        is the reported schedule; any other value picks at
+                        random, which tests schedule-agnosticism.
+    --top-k-dp K        candidate budget per lattice node (default 100, the
+                        reported configuration)
+    --max-lookahead L   span budget: how far the forward scan may run before it
+                        gives up on finding a depth-zero junction (default 48)
+    --window-mode {full,progressive,descend,wN}
+                        `full` (default) hands the DP the whole constraint span
+                        in one shot.  `progressive` is the published DPGrammar
+                        order -- it doubles the span and stops at the first width
+                        admitting any valid path, which on a pilot was width 1 at
+                        every site, so the DP changed one token and a closing
+                        token there ends the document.  Kept as the baseline arm.
     """
     if instance_ids:
         ids_list = instance_ids.split(",")
-        print(f"Running [{method}] on 1x A100: {dataset}, seed={seed}, T={steps}, gen_length={gen_length}, min_complete_frac={min_complete_frac}, tag={tag!r}")
+        print(f"Running [{method}] on 1x A100: {dataset}, seed={seed}, T={steps}, gen_length={gen_length}, tag={tag!r}")
         print(f"Instance filter: {ids_list}")
-        handle = run_chunk.spawn(seed, len(ids_list), 0, steps, block_ar, dataset, method, instance_ids, deviation_penalty, tag, gen_length, min_complete_frac)
+        handle = run_chunk.spawn(seed, len(ids_list), 0, steps, block_ar, dataset, method, instance_ids, tag, gen_length, oracle, window_mode, objective, cand_source, eos_in_candidates, top_k_dp, max_lookahead, remasking)
         result = handle.get()
         print(result)
         return
 
     chunk_size = (total + chunks - 1) // chunks
     mode = "block_ar=32" if block_ar else "full_parallel=256"
-    print(f"Running [{method}] on {chunks}x A100: {dataset}, seed={seed}, T={steps}, gen_length={gen_length}, {mode}, min_complete_frac={min_complete_frac}, tag={tag!r}")
+    print(f"Running [{method}] on {chunks}x A100: {dataset}, seed={seed}, T={steps}, gen_length={gen_length}, {mode}, tag={tag!r}")
     print(f"Total={total}, chunk_size={chunk_size}")
 
     handles = []
@@ -158,7 +206,7 @@ def main(
         if limit <= 0:
             break
         print(f"  Chunk {i}: offset={offset}, limit={limit}")
-        handles.append(run_chunk.spawn(seed, limit, offset, steps, block_ar, dataset, method, "", deviation_penalty, tag, gen_length, min_complete_frac))
+        handles.append(run_chunk.spawn(seed, limit, offset, steps, block_ar, dataset, method, "", tag, gen_length, oracle, window_mode, objective, cand_source, eos_in_candidates, top_k_dp, max_lookahead, remasking))
 
     for i, handle in enumerate(handles):
         result = handle.get()
