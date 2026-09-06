@@ -5,59 +5,79 @@
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
-\bibitem[Cardei et~al.(2025)Cardei, Christopher, Hartvigsen, Kailkhura, and Fioretto]{cardei2025constraineddiscretediffusion}
-Michael Cardei, Jacob~K. Christopher, Thomas Hartvigsen, Bhavya Kailkhura, and Ferdinando Fioretto.
+\bibitem[Cardei et~al.(2025)Cardei, Christopher, Hartvigsen, Kailkhura, and
+  Fioretto]{cardei2025constraineddiscretediffusion}
+Michael Cardei, Jacob~K. Christopher, Thomas Hartvigsen, Bhavya Kailkhura, and
+  Ferdinando Fioretto.
 \newblock Constrained discrete diffusion.
 \newblock In \emph{Advances in Neural Information Processing Systems}, 2025.
 \newblock arXiv:2503.09790.
 
 \bibitem[Chen et~al.(2024)Chen, Lin, Mei, and Byrne]{chen2024controldag}
 Jinghong Chen, Weizhe Lin, Jingbiao Mei, and Bill Byrne.
-\newblock Control-{DAG}: Constrained decoding for non-autoregressive directed acyclic {T5} using weighted finite state automata.
-\newblock In \emph{Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Short Papers)}, 2024.
+\newblock Control-{DAG}: Constrained decoding for non-autoregressive directed
+  acyclic {T5} using weighted finite state automata.
+\newblock In \emph{Proceedings of the 2024 Conference of the North American
+  Chapter of the Association for Computational Linguistics: Human Language
+  Technologies (Short Papers)}, 2024.
 
 \bibitem[Dang and Ermon(2026)]{dang2026fadllm}
 Meihua Dang and Stefano Ermon.
-\newblock Constrained decoding for diffusion language models via efficient inference over finite automata.
+\newblock Constrained decoding for diffusion language models via efficient
+  inference over finite automata.
 \newblock \emph{arXiv preprint arXiv:2607.07026}, 2026.
 
 \bibitem[Deng and Rush(2021)]{deng2021sequence}
 Yuntian Deng and Alexander~M. Rush.
 \newblock Sequence-to-lattice models for fast translation.
-\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2021}, Punta Cana, Dominican Republic, 2021.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  EMNLP 2021}, Punta Cana, Dominican Republic, 2021.
 \newblock URL \url{https://aclanthology.org/2021.findings-emnlp.318/}.
 
-\bibitem[Dong et~al.(2024)Dong, Ruan, Cai, Lai, Xu, Zhao, and Chen]{dong2024xgrammar}
-Yixin Dong, Charlie~F Ruan, Yaxing Cai, Ruihang Lai, Ziyi Xu, Yilong Zhao, and Tianqi Chen.
-\newblock Xgrammar: Flexible and efficient structured generation engine for large language models.
+\bibitem[Dong et~al.(2024)Dong, Ruan, Cai, Lai, Xu, Zhao, and
+  Chen]{dong2024xgrammar}
+Yixin Dong, Charlie~F Ruan, Yaxing Cai, Ruihang Lai, Ziyi Xu, Yilong Zhao, and
+  Tianqi Chen.
+\newblock Xgrammar: Flexible and efficient structured generation engine for
+  large language models.
 \newblock \emph{Proceedings of Machine Learning and Systems 7}, 2024.
 
 \bibitem[{ETH SRI}(2025)]{ethsri2025jsonmodeevalextended}
 {ETH SRI}.
 \newblock json-mode-eval-extended.
 \newblock Hugging Face dataset, 2025.
-\newblock URL \url{https://huggingface.co/datasets/eth-sri/json-mode-eval-extended}.
+\newblock URL
+  \url{https://huggingface.co/datasets/eth-sri/json-mode-eval-extended}.
 \newblock Extension of \texttt{NousResearch/json-mode-eval} to 272 instances.
 
 \bibitem[Geng et~al.(2023)Geng, Josifoski, Peyrard, and West]{geng2023grammar}
 Saibo Geng, Martin Josifoski, Maxime Peyrard, and Robert West.
-\newblock Grammar-constrained decoding for structured {NLP} tasks without finetuning.
-\newblock In \emph{Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing}, pages 10932--10952, Singapore, 2023.
+\newblock Grammar-constrained decoding for structured {NLP} tasks without
+  finetuning.
+\newblock In \emph{Proceedings of the 2023 Conference on Empirical Methods in
+  Natural Language Processing}, pages 10932--10952, Singapore, 2023.
 \newblock URL \url{https://aclanthology.org/2023.emnlp-main.674/}.
 
-\bibitem[Geng et~al.(2025)Geng, Cooper, Moskal, Jenkins, Berman, Ranchin, West, Horvitz, and Nori]{geng2025jsonschemabenchrigorousbenchmarkstructured}
-Saibo Geng, Hudson Cooper, Michał Moskal, Samuel Jenkins, Julian Berman, Nathan Ranchin, Robert West, Eric Horvitz, and Harsha Nori.
-\newblock Jsonschemabench: A rigorous benchmark of structured outputs for language models, 2025.
+\bibitem[Geng et~al.(2025)Geng, Cooper, Moskal, Jenkins, Berman, Ranchin, West,
+  Horvitz, and Nori]{geng2025jsonschemabenchrigorousbenchmarkstructured}
+Saibo Geng, Hudson Cooper, Michał Moskal, Samuel Jenkins, Julian Berman,
+  Nathan Ranchin, Robert West, Eric Horvitz, and Harsha Nori.
+\newblock Jsonschemabench: A rigorous benchmark of structured outputs for
+  language models, 2025.
 \newblock URL \url{https://arxiv.org/abs/2501.10868}.
 
 \bibitem[{Guidance AI}(2023)]{guidance}
 {Guidance AI}.
-\newblock Guidance: A guidance language for controlling large language models, 2023.
+\newblock Guidance: A guidance language for controlling large language models,
+  2023.
 \newblock URL \url{https://github.com/guidance-ai/guidance}.
 
-\bibitem[Li et~al.(2026)Li, Jiang, Cheng, Fu, Cai, Huang, Ye, Chen, and Hentenryck]{li2026planverifyfillstructured}
-Miao Li, Hanyang Jiang, Sikai Cheng, Hengyu Fu, Yuhang Cai, Baihe Huang, Tinghan Ye, Xuanzhou Chen, and Pascal~Van Hentenryck.
-\newblock Plan, verify and fill: A structured parallel decoding approach for diffusion language models, 2026.
+\bibitem[Li et~al.(2026)Li, Jiang, Cheng, Fu, Cai, Huang, Ye, Chen, and
+  Hentenryck]{li2026planverifyfillstructured}
+Miao Li, Hanyang Jiang, Sikai Cheng, Hengyu Fu, Yuhang Cai, Baihe Huang,
+  Tinghan Ye, Xuanzhou Chen, and Pascal~Van Hentenryck.
+\newblock Plan, verify and fill: A structured parallel decoding approach for
+  diffusion language models, 2026.
 \newblock URL \url{https://arxiv.org/abs/2601.12247}.
 
 \bibitem[{Microsoft}(2025)]{microsoft2025llguidance}
@@ -66,26 +86,36 @@ Miao Li, Hanyang Jiang, Sikai Cheng, Hengyu Fu, Yuhang Cai, Baihe Huang, Tinghan
 \newblock GitHub repository, 2025.
 \newblock URL \url{https://github.com/guidance-ai/llguidance}.
 
-\bibitem[M{\"u}ndler et~al.(2025b)M{\"u}ndler, He, Wang, Sen, Song, and Vechev]{muendler2025typeconstrained}
-Niels M{\"u}ndler, Jingxuan He, Hao Wang, Koushik Sen, Dawn Song, and Martin Vechev.
+\bibitem[M{\"u}ndler et~al.(2025b)M{\"u}ndler, He, Wang, Sen, Song, and
+  Vechev]{muendler2025typeconstrained}
+Niels M{\"u}ndler, Jingxuan He, Hao Wang, Koushik Sen, Dawn Song, and Martin
+  Vechev.
 \newblock Type-constrained code generation with language models.
-\newblock \emph{Proceedings of the ACM on Programming Languages}, 9\penalty0 (PLDI), 2025b.
+\newblock \emph{Proceedings of the ACM on Programming Languages}, 9\penalty0
+  (PLDI), 2025b.
 \newblock \doi{10.1145/3729274}.
 
 \bibitem[Mündler et~al.(2025a)Mündler, Dekoninck, and Vechev]{cd4dllm}
 Niels Mündler, Jasper Dekoninck, and Martin Vechev.
-\newblock Constrained decoding of diffusion llms with context-free grammars, 2025a.
+\newblock Constrained decoding of diffusion llms with context-free grammars,
+  2025a.
 \newblock URL \url{https://arxiv.org/abs/2508.10111}.
 \newblock arXiv:2508.10111.
 
-\bibitem[Nakshatri et~al.(2025)Nakshatri, Roy, Das, Chaidaroon, Boytsov, and Gangadharaiah]{nakshatri2025speculative}
-Nishanth~Sridhar Nakshatri, Shamik Roy, Rajarshi Das, Suthee Chaidaroon, Leonid Boytsov, and Rashmi Gangadharaiah.
+\bibitem[Nakshatri et~al.(2025)Nakshatri, Roy, Das, Chaidaroon, Boytsov, and
+  Gangadharaiah]{nakshatri2025speculative}
+Nishanth~Sridhar Nakshatri, Shamik Roy, Rajarshi Das, Suthee Chaidaroon, Leonid
+  Boytsov, and Rashmi Gangadharaiah.
 \newblock Constrained decoding with speculative lookaheads.
-\newblock In \emph{Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers)}, pages 4681--4700, 2025.
+\newblock In \emph{Proceedings of the 2025 Conference of the Nations of the
+  Americas Chapter of the Association for Computational Linguistics: Human
+  Language Technologies (Volume 1: Long Papers)}, pages 4681--4700, 2025.
 \newblock URL \url{https://aclanthology.org/2025.naacl-long.239/}.
 
-\bibitem[Nie et~al.(2025)Nie, Zhu, You, Zhang, Ou, Hu, Zhou, Lin, Wen, and Li]{llada}
-Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Yankai Lin, Ji-Rong Wen, and Chongxuan Li.
+\bibitem[Nie et~al.(2025)Nie, Zhu, You, Zhang, Ou, Hu, Zhou, Lin, Wen, and
+  Li]{llada}
+Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou,
+  Yankai Lin, Ji-Rong Wen, and Chongxuan Li.
 \newblock Large language diffusion models, 2025.
 \newblock URL \url{https://arxiv.org/abs/2502.09992}.
 
@@ -93,7 +123,8 @@ Shen Nie, Fengqi Zhu, Zebin You, Xiaolu Zhang, Jingyang Ou, Jun Hu, Jun Zhou, Ya
 {Nous Research}.
 \newblock json-mode-eval.
 \newblock Hugging Face Datasets, 2024.
-\newblock URL \url{https://huggingface.co/datasets/NousResearch/json-mode-eval}.
+\newblock URL
+  \url{https://huggingface.co/datasets/NousResearch/json-mode-eval}.
 
 \bibitem[Park et~al.(2025)Park, Zhou, and D'Antoni]{park2025flexible}
 Kanghee Park, Timothy Zhou, and Loris D'Antoni.
@@ -101,43 +132,62 @@ Kanghee Park, Timothy Zhou, and Loris D'Antoni.
 \newblock In \emph{International Conference on Machine Learning}, 2025.
 \newblock arXiv:2502.05111.
 
-\bibitem[Patil et~al.(2025)Patil, Mao, Yan, Ji, Suresh, Stoica, and Gonzalez]{patil2025bfcl}
-Shishir~G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh, Ion Stoica, and Joseph~E. Gonzalez.
-\newblock The {Berkeley} function calling leaderboard ({BFCL}): From tool use to agentic evaluation of large language models.
+\bibitem[Patil et~al.(2025)Patil, Mao, Yan, Ji, Suresh, Stoica, and
+  Gonzalez]{patil2025bfcl}
+Shishir~G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh,
+  Ion Stoica, and Joseph~E. Gonzalez.
+\newblock The {Berkeley} function calling leaderboard ({BFCL}): From tool use
+  to agentic evaluation of large language models.
 \newblock In \emph{International Conference on Machine Learning}, 2025.
 
-\bibitem[Poesia et~al.(2022)Poesia, Polozov, Le, Tiwari, Soares, Meek, and Gulwani]{poesia2022synchromesh}
-Gabriel Poesia, Alex Polozov, Vu~Le, Ashish Tiwari, Gustavo Soares, Christopher Meek, and Sumit Gulwani.
-\newblock Synchromesh: Reliable code generation from pre-trained language models.
+\bibitem[Poesia et~al.(2022)Poesia, Polozov, Le, Tiwari, Soares, Meek, and
+  Gulwani]{poesia2022synchromesh}
+Gabriel Poesia, Alex Polozov, Vu~Le, Ashish Tiwari, Gustavo Soares, Christopher
+  Meek, and Sumit Gulwani.
+\newblock Synchromesh: Reliable code generation from pre-trained language
+  models.
 \newblock In \emph{International Conference on Learning Representations}, 2022.
 
-\bibitem[Sahoo et~al.(2024)Sahoo, Arriola, Schiff, Gokaslan, Marroquin, Chiu, Rush, and Kuleshov]{sahoo2024simple}
-Subham Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin, Justin Chiu, Alexander Rush, and Volodymyr Kuleshov.
+\bibitem[Sahoo et~al.(2024)Sahoo, Arriola, Schiff, Gokaslan, Marroquin, Chiu,
+  Rush, and Kuleshov]{sahoo2024simple}
+Subham Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar Marroquin,
+  Justin Chiu, Alexander Rush, and Volodymyr Kuleshov.
 \newblock Simple and effective masked diffusion language models.
-\newblock In \emph{Advances in Neural Information Processing Systems}, volume~37, pages 130136--130184, 2024.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~37, pages 130136--130184, 2024.
 
 \bibitem[Shao et~al.(2022)Shao, Ma, and Feng]{shao2022viterbi}
 Chenze Shao, Zhengrui Ma, and Yang Feng.
-\newblock Viterbi decoding of directed acyclic transformer for non-autoregressive machine translation.
-\newblock In \emph{Findings of the Association for Computational Linguistics: EMNLP 2022}, pages 4390--4397, 2022.
+\newblock Viterbi decoding of directed acyclic transformer for
+  non-autoregressive machine translation.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  EMNLP 2022}, pages 4390--4397, 2022.
 
-\bibitem[Shi et~al.(2024)Shi, Han, Wang, Doucet, and Titsias]{shi2024simplified}
+\bibitem[Shi et~al.(2024)Shi, Han, Wang, Doucet, and
+  Titsias]{shi2024simplified}
 Jiaxin Shi, Kehang Han, Zhe Wang, Arnaud Doucet, and Michalis Titsias.
 \newblock Simplified and generalized masked diffusion for discrete data.
-\newblock In \emph{Advances in Neural Information Processing Systems}, volume~37, pages 103131--103167, 2024.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~37, pages 103131--103167, 2024.
 
-\bibitem[Suresh et~al.(2025)Suresh, Banerjee, Ugare, Misailovic, and Singh]{suresh2025dingoconstrainedinferencediffusion}
-Tarun Suresh, Debangshu Banerjee, Shubham Ugare, Sasa Misailovic, and Gagandeep Singh.
+\bibitem[Suresh et~al.(2025)Suresh, Banerjee, Ugare, Misailovic, and
+  Singh]{suresh2025dingoconstrainedinferencediffusion}
+Tarun Suresh, Debangshu Banerjee, Shubham Ugare, Sasa Misailovic, and Gagandeep
+  Singh.
 \newblock Dingo: Constrained inference for diffusion llms, 2025.
 \newblock URL \url{https://arxiv.org/abs/2505.23061}.
 
-\bibitem[Tuccio et~al.(2025)Tuccio, Bulla, Madonia, Gangemi, and Mongiov{\`i}]{tuccio2025grammarllm}
-Gabriele Tuccio, Luana Bulla, Maria Madonia, Aldo Gangemi, and Misael Mongiov{\`i}.
+\bibitem[Tuccio et~al.(2025)Tuccio, Bulla, Madonia, Gangemi, and
+  Mongiov{\`i}]{tuccio2025grammarllm}
+Gabriele Tuccio, Luana Bulla, Maria Madonia, Aldo Gangemi, and Misael
+  Mongiov{\`i}.
 \newblock {GRAMMAR-LLM}: Grammar-constrained natural language generation.
-\newblock In \emph{Findings of the Association for Computational Linguistics: ACL 2025}, pages 3412--3422, 2025.
+\newblock In \emph{Findings of the Association for Computational Linguistics:
+  ACL 2025}, pages 3412--3422, 2025.
 \newblock URL \url{https://aclanthology.org/2025.findings-acl.177/}.
 
-\bibitem[Ugare et~al.(2025)Ugare, Suresh, Kang, Misailovic, and Singh]{ugare2025syncode}
+\bibitem[Ugare et~al.(2025)Ugare, Suresh, Kang, Misailovic, and
+  Singh]{ugare2025syncode}
 Shubham Ugare, Tarun Suresh, Hangoo Kang, Sasa Misailovic, and Gagandeep Singh.
 \newblock {SynCode}: {LLM} generation with grammar augmentation.
 \newblock \emph{Transactions on Machine Learning Research}, 2025.
@@ -149,17 +199,25 @@ Brandon~T Willard and R{\'e}mi Louf.
 \newblock \emph{arXiv preprint arXiv:2307.09702}, 2023.
 
 \bibitem[Ye et~al.(2025)Ye, Xie, Zheng, Gao, Wu, Jiang, Li, and Kong]{dream}
-Jiacheng Ye, Zhihui Xie, Lin Zheng, Jiahui Gao, Zirui Wu, Xin Jiang, Zhenguo Li, and Lingpeng Kong.
+Jiacheng Ye, Zhihui Xie, Lin Zheng, Jiahui Gao, Zirui Wu, Xin Jiang, Zhenguo
+  Li, and Lingpeng Kong.
 \newblock Dream 7b: Diffusion large language models, 2025.
 \newblock URL \url{https://arxiv.org/abs/2508.15487}.
 
-\bibitem[Zhang et~al.(2026)Zhang, Li, Liu, Li, Jia, Li, and Li]{zhang2026lookaheadthenverifyreliableconstraineddecoding}
-Yitong Zhang, Yongmin Li, Yuetong Liu, Jia Li, Xiaoran Jia, Zherui Li, and Ge~Li.
-\newblock Lookahead-then-verify: Reliable constrained decoding for diffusion {LLMs} under context-free grammars.
-\newblock \emph{Proceedings of the ACM on Software Engineering}, 3\penalty0 (ISSTA), 2026.
+\bibitem[Zhang et~al.(2026)Zhang, Li, Liu, Li, Jia, Li, and
+  Li]{zhang2026lookaheadthenverifyreliableconstraineddecoding}
+Yitong Zhang, Yongmin Li, Yuetong Liu, Jia Li, Xiaoran Jia, Zherui Li, and
+  Ge~Li.
+\newblock Lookahead-then-verify: Reliable constrained decoding for diffusion
+  {LLMs} under context-free grammars.
+\newblock \emph{Proceedings of the ACM on Software Engineering}, 3\penalty0
+  (ISSTA), 2026.
 
-\bibitem[Zheng et~al.(2024)Zheng, Yin, Xie, Sun, Huang, Yu, Cao, Kozyrakis, Stoica, Gonzalez, Barrett, and Sheng]{zheng2024sglang}
-Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chuyue Sun, Jeff Huang, Cody~Hao Yu, Shiyi Cao, Christos Kozyrakis, Ion Stoica, Joseph~E. Gonzalez, Clark Barrett, and Ying Sheng.
+\bibitem[Zheng et~al.(2024)Zheng, Yin, Xie, Sun, Huang, Yu, Cao, Kozyrakis,
+  Stoica, Gonzalez, Barrett, and Sheng]{zheng2024sglang}
+Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chuyue Sun, Jeff Huang, Cody~Hao
+  Yu, Shiyi Cao, Christos Kozyrakis, Ion Stoica, Joseph~E. Gonzalez, Clark
+  Barrett, and Ying Sheng.
 \newblock {SGLang}: Efficient execution of structured language model programs.
 \newblock In \emph{Advances in Neural Information Processing Systems}, 2024.
 
